@@ -8,7 +8,9 @@ import { router } from 'expo-router';
 import { toTab } from '@/ui/nav';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, TextInput, View, type ViewStyle } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { firstOf } from '@/state/store';
 import { anim, E, skBlink, skPin, skPop, skPulse, skSheet, skSlideIn, skUp } from '@/theme/anim';
@@ -287,6 +289,30 @@ function MapInner() {
   ];
   const selected = sel ?? vis[0]?.userId ?? null;
 
+  // --- people sheet shutter ----------------------------------------------------------------------
+  const [sheetOpen, setSheetOpen] = useState(true);
+  const sheetH = useSharedValue(300);
+  const sheetY = useSharedValue(0);
+  const sheetSt = useAnimatedStyle(() => ({ transform: [{ translateY: sheetY.get() }] }));
+  const openSheet = () => {
+    setSheetOpen(true);
+    sheetY.set(withTiming(0, { duration: 420, easing: Easing.bezier(0.2, 0.9, 0.3, 1.15) }));
+  };
+  // Vertical drags only (sideways ones scroll the cards). Down past a little, or a quick flick, tucks it away.
+  const sheetPan = Gesture.Pan()
+    .activeOffsetY([-8, 8])
+    .failOffsetX([-14, 14])
+    .onUpdate((e) => {
+      sheetY.set(e.translationY > 0 ? e.translationY : e.translationY / 6);
+    })
+    .onEnd((e) => {
+      if (e.translationY > 70 || e.velocityY > 650) {
+        sheetY.set(withTiming(sheetH.get() + 120, { duration: 260, easing: Easing.in(Easing.quad) }, () => scheduleOnRN(setSheetOpen, false)));
+      } else {
+        sheetY.set(withTiming(0, { duration: 260, easing: Easing.bezier(0.2, 0.9, 0.3, 1.15) }));
+      }
+    });
+
   // --- real map camera -------------------------------------------------------------------------
   const send = (c: { center: LL; zoom: number } | null) => {
     if (!c) return;
@@ -497,14 +523,17 @@ function MapInner() {
         </Press>
       </A>
 
-      {/* glass sheet */}
+      {/* glass sheet — a shutter: flick it down to tuck it away, tap the people button to bring it back */}
+      <GestureDetector gesture={sheetPan}>
+      <Animated.View
+        pointerEvents={sheetOpen ? 'auto' : 'none'}
+        onLayout={(e) => {
+          sheetH.set(e.nativeEvent.layout.height);
+        }}
+        style={[{ position: 'absolute', left: 0, right: 0, bottom: 92 }, sheetSt]}>
       <A
         style={[
           {
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 92,
             borderTopLeftRadius: 30,
             borderTopRightRadius: 30,
             borderWidth: 1.5,
@@ -601,7 +630,7 @@ function MapInner() {
                               style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 999, backgroundColor: C.tomato, borderWidth: 2, borderColor: C.ink, paddingVertical: 6 }}>
                               <Plane size={12} fill="#fff" />
                               <T f={F.b8} s={12} c="#fff">
-                                Throw a letter
+                                Throw
                               </T>
                             </Press>
                             {c.connectionId ? (
@@ -611,9 +640,10 @@ function MapInner() {
                                   router.push('/thread');
                                 }}
                                 accessibilityRole="button"
+                                accessibilityLabel={`Chat with ${firstOf(c.name)}`}
                                 style={{ alignItems: 'center', borderRadius: 999, borderWidth: 2, borderColor: C.ink, paddingVertical: 5 }}>
                                 <T f={F.b7} s={12}>
-                                  Chat with {firstOf(c.name)}
+                                  Chat
                                 </T>
                               </Press>
                             ) : null}
@@ -669,6 +699,29 @@ function MapInner() {
           </ScrollView>
         </View>
       </A>
+      </Animated.View>
+      </GestureDetector>
+
+      {/* the tucked-away sheet's stand-in */}
+      {!sheetOpen ? (
+        <A style={[{ position: 'absolute', left: 16, bottom: 92 + 18 }, anim(skPop(), 0.4, 0, E.s14)]}>
+          <Press
+            onPress={openSheet}
+            accessibilityRole="button"
+            accessibilityLabel={`Show people (${vis.length})`}
+            pressed={pushed(2, 1)}
+            style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: Lm, borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center', ...hard(3) }}>
+            <Icon d={ICON.groups} size={24} color={C.ink} sw={2} />
+            {vis.length ? (
+              <View style={{ position: 'absolute', top: -6, right: -6, minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 5, backgroundColor: C.ink, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+                <T f={F.m7} s={10} c={Lm}>
+                  {vis.length}
+                </T>
+              </View>
+            ) : null}
+          </Press>
+        </A>
+      ) : null}
     </>
   );
 }

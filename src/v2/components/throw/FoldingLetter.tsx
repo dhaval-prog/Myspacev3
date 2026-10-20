@@ -159,9 +159,9 @@ interface FoldingLetterProps {
    * attention). */
   onLaunched: () => void;
   throwLabel?: string;
-  /** Opens the inbox — its button lives in the bottom-controls row below the paper alongside
-   * Photo and Voice, rather than in a separate header. */
-  onOpenInbox: () => void;
+  /** Optional extra button at the end of the bottom-controls row (v3 hides the inbox here —
+   * received letters live on the Chats screen; the reply composer uses it as "cancel"). */
+  onOpenInbox?: () => void;
   unreadCount: number;
   /** Fires once, right when a recipient-switching drag starts — either a center-zone hold-and-
    * drag on the folded, ready-to-throw plane, or a clearly horizontal flick on the still-open
@@ -252,6 +252,7 @@ function BottomIconSurface({
   style,
   children,
   active,
+  primary,
 }: {
   isNight?: boolean;
   tintColor: string;
@@ -262,14 +263,15 @@ function BottomIconSurface({
    * circle itself, not just the glyph inside it, per explicit request. Overrides both the day
    * glass tint and the night skin's own solid fill. */
   active?: boolean;
+  /** The row's main button (voice) — dark with a lime offset, like the Chats screen's compose button. */
+  primary?: boolean;
 }) {
-  if (active) return <View style={[style, styles.iconSurfaceActive]}>{children}</View>;
-  if (isNight) return <View style={[style, styles.iconSurfaceNight]}>{children}</View>;
-  return (
-    <GlassSurface tint="light" tintColor={tintColor} style={style}>
-      {children}
-    </GlassSurface>
-  );
+  // v3 "sticker" look, same as the Chats screen's buttons: solid fill, ink outline, hard offset shadow.
+  void tintColor;
+  if (active) return <View style={[style, styles.iconSurface, styles.iconSurfaceActive]}>{children}</View>;
+  if (primary) return <View style={[style, styles.iconSurface, styles.iconSurfacePrimary]}>{children}</View>;
+  if (isNight) return <View style={[style, styles.iconSurface, styles.iconSurfaceNight]}>{children}</View>;
+  return <View style={[style, styles.iconSurface]}>{children}</View>;
 }
 export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>(function FoldingLetter(
   {
@@ -1123,13 +1125,13 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             voice.recording ? (
               <View style={[styles.micBtnShadow, roundBtnDynamicStyle, isNight && styles.micBtnShadowNight, pressed && styles.roundBtnPressed]}>
                 <View style={[styles.micBtn, roundBtnDynamicStyle, isNight ? styles.micBtnActiveNight : styles.micBtnActive]}>
-                  <Icon path={STOP_ICON} size={22 * bottomRowScale} color={isNight ? '#000000' : throwColor.paper} strokeWidth={1.8} />
+                  <Icon path={STOP_ICON} size={22 * bottomRowScale} color={isNight ? '#000000' : '#FFFFFF'} strokeWidth={1.8} />
                 </View>
               </View>
             ) : (
               <View style={[styles.micBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlueStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
-                  <Icon path={MIC_ICON} size={27 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+                <BottomIconSurface primary isNight={isNight} tintColor={throwGlass.tintWaterBlueStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
+                  <Icon path={MIC_ICON} size={27 * bottomRowScale} color="#C3EA4F" strokeWidth={1.9} />
                 </BottomIconSurface>
               </View>
             )
@@ -1187,6 +1189,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           )}
         </Pressable>
 
+        {onOpenInbox ? (
         <Pressable onPress={onOpenInbox} accessibilityRole="button" accessibilityLabel="Inbox">
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
@@ -1201,6 +1204,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             </View>
           )}
         </Pressable>
+        ) : null}
         </Animated.View>
         </View>
 
@@ -1375,8 +1379,17 @@ const styles = StyleSheet.create({
   // The night skin's bottom-icon chrome — a solid dark circle instead of light glass (see
   // BottomIconSurface). Layered on top of whatever size style (roundBtn/micBtn) is already
   // passed in, so it only ever overrides backgroundColor.
-  iconSurfaceNight: { backgroundColor: throwNightColor.iconBg, alignItems: 'center', justifyContent: 'center' },
-  iconSurfaceActive: { backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
+  iconSurface: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#16210C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '3px 3px 0 #16210C',
+  } as ViewStyle,
+  iconSurfaceNight: { backgroundColor: throwNightColor.iconBg, borderColor: '#FFFFFF', boxShadow: '3px 3px 0 #C3EA4F' } as ViewStyle,
+  iconSurfacePrimary: { backgroundColor: '#16210C', borderColor: '#16210C', boxShadow: '3px 3px 0 #C3EA4F, 0 10px 22px rgba(22,33,12,.26)' } as ViewStyle,
+  iconSurfaceActive: { backgroundColor: '#FF4F2E', borderColor: '#16210C', boxShadow: '3px 3px 0 #16210C' } as ViewStyle,
   // A "photos pasted onto the letter" look — a horizontal row of small white-bordered thumbnails
   // near the top of the paper, scrollable once there are more than fit. Spans most of the paper's
   // width rather than sitting in one corner, since there can be several now — LetterCanvas
@@ -1443,12 +1456,12 @@ const styles = StyleSheet.create({
   // (unscaled) size — bottomRowScale's roundBtnDynamicStyle overrides width/height/borderRadius
   // inline once the paper's own width is measured. The mic button reuses the exact same
   // roundBtnDynamicStyle (below) so all four bottom-row buttons are always the same size.
-  roundBtnShadow: { width: 60, height: 60, borderRadius: 30, ...throwColor.shadowSoft },
+  roundBtnShadow: { width: 60, height: 60, borderRadius: 30 },
   roundBtn: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
-  roundBtnPressed: { opacity: 0.7 },
-  micBtnShadow: { width: 60, height: 60, borderRadius: 30, ...throwColor.shadowSoft },
+  roundBtnPressed: { transform: [{ translateX: 2 }, { translateY: 2 }] },
+  micBtnShadow: { width: 60, height: 60, borderRadius: 30 },
   micBtn: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
-  micBtnActive: { backgroundColor: throwColor.clayDeep },
+  micBtnActive: { backgroundColor: '#FF4F2E', borderWidth: 2, borderColor: '#16210C', boxShadow: '3px 3px 0 #16210C' } as ViewStyle,
   // Night skin's "active" mic glow — a bright white circle with a soft white halo and a black
   // glyph, in place of the day skin's solid clay-orange fill, per the reference screenshot.
   micBtnShadowNight: { shadowColor: '#FFFFFF', shadowOpacity: 0.9, shadowRadius: 20, shadowOffset: { width: 0, height: 0 }, elevation: 12 },
