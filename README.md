@@ -21,6 +21,18 @@ Checks: `npx tsc --noEmit` and `npx eslint src`.
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Pointing at a different Supabase project |
 | `EXPO_PUBLIC_MAPBOX_TOKEN`, `EXPO_PUBLIC_MAPBOX_STYLE_URL` | Throw's map **on web** (native uses the platform map) |
 
+### Google sign-in setup (one-time, Supabase dashboard)
+
+Supabase only redirects back to URLs on its allow-list and otherwise falls back to the project's Site URL (v2's site). In **Authentication → URL Configuration → Redirect URLs**, add:
+
+- `https://myspacev3*.vercel.app/**` (production + preview deploys) and any custom domain
+- `myspacev3://**` (the native app — v3 uses its own scheme so sign-in never opens the v2 app)
+- `http://localhost:8081/**` for local web dev
+
+### Database
+
+`profiles.avatar_color` (smallint 0–7, nullable) stores each person's sticker colour so friends see it. Added by the `profiles_avatar_color` migration, which also makes `handle_new_user` copy `avatar_color` from sign-up metadata. Additive only; v2 ignores it.
+
 ## Deploy (web)
 
 `vercel.json` builds the web app (`npm run build` → `dist/`) as a single-page app; `public/` adds the PWA manifest and icons, so it can be added to a phone's home screen and opens full-screen. On vercel.com: **Add New → Project → import `dhaval-prog/Myspacev3`**, add `EXPO_PUBLIC_MAPBOX_TOKEN` (same value as v2's Vercel project) under Environment Variables, and deploy. Every push to `main` redeploys.
@@ -43,6 +55,7 @@ On phones the web app fills the screen; on desktop it shows as a centred mobile-
 | `/map` | Map | Friends' shared locations (+ people sharing with everyone) |
 | `/games`, `/games/npat`, `/games/trivia` | Games hub; real multiplayer NPAT and Trivia | Leaderboard/points; v2 game screens |
 | `/pocket`, `/pocket/[id]`, `/pocket/manage` | Pocket cards, card detail, full wallet | Budget cards, spends; v2 wallet for new/join/members/history |
+| `/look` | Pick your look (change colour/photo any time) | `profiles.avatar_color` / `avatar_url` |
 | `/account` | Account settings | v2 screen |
 
 ## Code map

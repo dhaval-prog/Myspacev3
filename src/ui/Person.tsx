@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { initialsOf } from '@/state/store';
+import { useAvatarColor } from '@/state/avatarColors';
+import { initialsOf, SWATCHES } from '@/state/store';
 import { C, F } from '@/theme/tokens';
 import { T } from './primitives';
 
@@ -25,17 +26,22 @@ type Props = {
 };
 
 /** Round avatar: the person's photo, or their initials on a sticker colour. */
-export function Person({ id, name, avatarUrl, size, font, ink = C.deep, bg, style }: Props) {
+export function Person({ id, name, avatarUrl, size, font, ink, bg, style }: Props) {
+  // Their chosen sticker colour (Pick your look) wins; otherwise a stable generated one.
+  const chosen = useAvatarColor(bg ? null : id);
+  const swatch = chosen != null ? SWATCHES[chosen % SWATCHES.length] : null;
+  const fill = bg ?? swatch?.[0] ?? colorFor(id);
+  const text = swatch && !bg ? swatch[1] : (ink ?? C.deep);
   return (
     <View
       style={[
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: bg ?? colorFor(id), overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: fill, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
         style,
       ]}>
       {avatarUrl ? (
         <Image source={{ uri: avatarUrl }} style={{ width: size, height: size }} contentFit="cover" />
       ) : (
-        <T f={F.b7} s={font ?? Math.round(size / 3)} c={ink}>
+        <T f={F.b7} s={font ?? Math.round(size / 3)} c={text}>
           {initialsOf(name)}
         </T>
       )}

@@ -487,7 +487,7 @@ export default function MapScreen() {
       <ThrowProvider>
         <MapInner />
       </ThrowProvider>
-      <TabBar active="map" delay={0.2} />
+      <TabBar active="map" />
     </Screen>
   );
 }

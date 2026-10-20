@@ -172,7 +172,7 @@ export function useY() {
 export function WebShell({ children }: { children: ReactNode }) {
   if (!IS_WEB) return <>{children}</>;
   return (
-    <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#111' }}>
+    <View style={{ flex: 1, alignItems: 'center', backgroundColor: C.cobalt }}>
       <View style={{ flex: 1, width: '100%', maxWidth: WEB_MAX_WIDTH, overflow: 'hidden', backgroundColor: C.paper }}>{children}</View>
     </View>
   );

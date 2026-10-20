@@ -130,7 +130,6 @@ export default function Games() {
   const npatPts = Math.max(0, net('NPAT'));
   const trivPts = Math.max(0, net('TRIVIA'));
   const barMax = Math.max(1, npatPts + trivPts);
-  const BADGE = [C.tomato, C.lime, '#fff'];
   return (
     <Screen style={{ backgroundColor: C.paper, ...(dots(0.07, 16) as ViewStyle) }}>
       <ScrollView contentContainerStyle={{ paddingTop: top + 18, paddingHorizontal: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
@@ -165,8 +164,7 @@ export default function Games() {
                     avatarUrl={e.avatarUrl}
                     size={54}
                     font={16}
-                    ink={i === 0 ? '#fff' : C.ink}
-                    bg={BADGE[i]}
+                    ink={C.ink}
                     style={{ borderWidth: 2, borderColor: C.ink }}
                   />
                   <View
@@ -310,7 +308,7 @@ export default function Games() {
           />
         </View>
       </ScrollView>
-      <TabBar active="games" tone="ink" delay={0.2} />
+      <TabBar active="games" />
     </Screen>
   );
 }

@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myspace",
+    "scheme": "myspacev3",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
@@ -46,7 +46,8 @@
     "web": {
       "output": "single",
       "favicon": "./assets/images/favicon.png",
-      "themeColor": "#2B4BFF"
+      "themeColor": "#2B4BFF",
+      "backgroundColor": "#2B4BFF"
     },
     "plugins": [
       "expo-router",
@@ -96,6 +97,6 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "backgroundColor": "#F4EFE3"
+    "backgroundColor": "#2B4BFF"
   }
 }

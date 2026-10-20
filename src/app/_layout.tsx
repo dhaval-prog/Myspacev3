@@ -5,13 +5,14 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, type ReactNode } from 'react';
-import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AvatarColorsProvider } from '@/state/avatarColors';
 import { uploadAvatar } from '@/state/profile';
 import { StoreProvider, useStore } from '@/state/store';
 import { C } from '@/theme/tokens';
+import { Boot } from '@/ui/Boot';
 import { WebShell } from '@/ui/primitives';
 import { CallOverlay } from '@/v2/components/calls/CallOverlay';
 import { AuthProvider, useAuth } from '@/v2/context/AuthContext';
@@ -46,6 +47,7 @@ function SessionProviders({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   if (!session) return <>{children}</>;
   return (
+    <AvatarColorsProvider>
     <NotificationsProvider>
       <FriendsProvider>
         <CallProvider>
@@ -66,12 +68,13 @@ function SessionProviders({ children }: { children: ReactNode }) {
         </CallProvider>
       </FriendsProvider>
     </NotificationsProvider>
+    </AvatarColorsProvider>
   );
 }
 
 function Routes() {
   const { session, initializing } = useAuth();
-  if (initializing) return <View style={{ flex: 1, backgroundColor: C.cobalt }} />;
+  if (initializing) return <Boot />;
   const signedIn = !!session;
   return (
     <SessionProviders>
@@ -97,6 +100,7 @@ function Routes() {
           <Stack.Screen name="games/trivia" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="pocket" options={{ animation: 'none' }} />
           <Stack.Screen name="account" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="look" options={{ animation: 'slide_from_bottom' }} />
         </Stack.Protected>
       </Stack>
     </SessionProviders>
@@ -117,10 +121,10 @@ export default function RootLayout() {
     if (loaded || error) SplashScreen.hideAsync().catch(() => {});
   }, [loaded, error]);
 
-  if (!loaded && !error) return null;
+  if (!loaded && !error) return <Boot />;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#111' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: C.cobalt }}>
       <SafeAreaProvider>
         <StoreProvider>
           <AuthProvider>

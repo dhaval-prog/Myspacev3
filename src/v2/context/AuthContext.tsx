@@ -127,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Native: there's no browser location to redirect — open the
         // provider's consent screen in an in-app browser session and wait
-        // for it to hand back a `myspace://` deep link with the session.
+        // for it to hand back a `myspacev3://` deep link with the session.
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider,
           options: { redirectTo: nativeRedirectTo, skipBrowserRedirect: true },
