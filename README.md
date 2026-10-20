@@ -1,49 +1,59 @@
 # Myspace v3
 
-Mobile app (Expo + React Native) built from the **"Sticker pop"** design handoff: cream dot-grid paper, thick ink outlines, hard offset shadows, tilted stickers and stamp/pop animations.
+Mobile app (Expo + React Native, also runs as a mobile web app) with the **"Sticker pop"** design, running on the same Supabase backend as Myspace v2: real accounts, friends, chats, Throw letters, map locations, multiplayer games and Pocket budgets.
 
 ## Run it
 
 ```bash
 npm install
 npx expo start          # press i / a for a simulator, or scan with a dev build
-npx expo start --web    # web preview, drawn inside a 390×844 phone frame
+npx expo start --web    # mobile web app
 ```
 
 Checks: `npx tsc --noEmit` and `npx eslint src`.
 
+### Backend
+
+`src/v2/lib/supabase.ts` defaults to the shared Myspace Supabase project (the same one v2 uses), so sign-in works out of the box. The publishable key there is a public client key — data access is enforced by the database's row-level security. Override with env vars (see `.env.example`):
+
+| Variable | Needed for |
+| --- | --- |
+| `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Pointing at a different Supabase project |
+| `EXPO_PUBLIC_MAPBOX_TOKEN`, `EXPO_PUBLIC_MAPBOX_STYLE_URL` | Throw's map **on web** (native uses the platform map) |
+
 ## Deploy (web)
 
-`vercel.json` builds the web version (`npm run build` → `dist/`) and serves it as a single-page app. On vercel.com: **Add New → Project → import `dhaval-prog/Myspacev3`** and deploy with the defaults. Every push to `main` redeploys.
+`vercel.json` builds the web app (`npm run build` → `dist/`) as a single-page app; `public/` adds the PWA manifest and icons, so it can be added to a phone's home screen and opens full-screen. On vercel.com: **Add New → Project → import `dhaval-prog/Myspacev3`**, add `EXPO_PUBLIC_MAPBOX_TOKEN` (same value as v2's Vercel project) under Environment Variables, and deploy. Every push to `main` redeploys.
+
+On phones the web app fills the screen; on desktop it shows as a centred mobile-width column.
 
 ## Screens
 
-| Route | Screen |
-| --- | --- |
-| `/` | 01 Splash — logo stamps in, tap stickers to peel them |
-| `/welcome` | 02 Welcome — camcorder clip, ticker, slide to start |
-| `/signup` | 03 Sign up — one question at a time, editable chips, password strength |
-| `/avatar` | 04 Pick your look — photo + colour, sticker re-paints |
-| `/login` | 05 Log in — intercom panel, LCD echoes typing, BUZZ |
-| `/verify` | 06 Check mail — envelope flap opens, letter rises |
-| `/success` | 07 Your pass — lanyard drop, holo foil, drag to tilt |
-| `/friends` | 08 Add friends — QR + invite code, type a code, Add → ADDED |
-| `/chat` | 09 Home · Chats |
-| `/throw` | Throw a letter along the route |
-| `/map` | 10 Map — pins, filters, zoom, glass sheet, throw from a card |
-| `/games`, `/games/npat`, `/games/trivia` | G1–G3 |
-| `/pocket`, `/pocket/[id]` | P1–P2 |
+| Route | Screen | Data |
+| --- | --- | --- |
+| `/` | Splash (signed-in users skip to Chats) | — |
+| `/welcome`, `/signup`, `/avatar` | Welcome, sign up, pick your look | Creates the Supabase account (name, colour, photo) |
+| `/login` | Log in (intercom) | Supabase sign-in, password reset |
+| `/verify` | Check mail | Resend confirmation email |
+| `/success` | Your pass | Profile, friend / letter / game counts |
+| `/friends` | Add friends | Your real friend code + QR, look up a code, send request |
+| `/chat` | Chats | Friends, groups, last message, unread, online, typing, requests |
+| `/thread` | Chat thread, group chat, requests, new group, QR scanner | v2 screens |
+| `/throw`, `/letters` | Throw + received letters | v2 screens |
+| `/map` | Map | Friends' shared locations (+ people sharing with everyone) |
+| `/games`, `/games/npat`, `/games/trivia` | Games hub; real multiplayer NPAT and Trivia | Leaderboard/points; v2 game screens |
+| `/pocket`, `/pocket/[id]`, `/pocket/manage` | Pocket cards, card detail, full wallet | Budget cards, spends; v2 wallet for new/join/members/history |
+| `/account` | Account settings | v2 screen |
 
 ## Code map
 
-- `src/app/` — routes (Expo Router), one file per screen.
-- `src/theme/tokens.ts` — colours, fonts, dot-grid / hard-shadow helpers, `₹` formatting.
-- `src/theme/anim.ts` — every `sk*` / `gp*` keyframe from `animations.css`, ported to Reanimated 4 CSS animations.
-- `src/ui/` — primitives (`T` text, `Press`, `Icon`, tab bar, screen frame) and visual helpers (sheen, stroke-draw, stripes, barcode).
-- `src/state/store.tsx` — shared app state and **all mock data** (people, chats, pocket cards). Replace with real APIs.
+- `src/app/` — routes (Expo Router). `_layout.tsx` gates routes on the Supabase session and mounts the signed-in providers.
+- `src/v2/` — Myspace v2's data layer (`context/`, `lib/`, `types/`, `utils/`) and the screens reused as-is (Throw, chat threads, games, wallet, account). Ported unchanged apart from React Native 0.88 type fixes; excluded from ESLint (see `eslint.config.js`).
+- `src/state/` — local sign-up draft (`store.tsx`) and the signed-in profile + avatar upload (`profile.tsx`).
+- `src/theme/` — design tokens and every `sk*` / `gp*` keyframe from the handoff's `animations.css`.
+- `src/ui/` — primitives, tab bar, avatar helpers, visual effects.
 
-Gradients, dot grids and multi-layer shadows use React Native's built-in CSS `backgroundImage` / `boxShadow` (RN 0.76+, New Architecture), so they render the same on iOS, Android and web.
+## Notes
 
-## Not wired yet
-
-All data is mock. Sign up / log in / verify, friend codes, chats, map locations, games and Pocket need real backends. The alternate design variants in the handoff (sign-up B03/chat, home album/cork/bento, friends sheet/list) were not built; the defaults were.
+- Throw, chat threads, the real-time games and the wallet's extra sheets use v2's own screens and styling; the rest uses the v3 sticker design.
+- Calls (`react-native-webrtc`), camera scanning and speech-to-text need a development build (`npx expo run:ios|android` or EAS), not Expo Go.

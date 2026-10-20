@@ -5,17 +5,14 @@ import { ScrollView, View, type ViewStyle } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { anim, E, skPop } from '@/theme/anim';
-import { C, dots, F, hard } from '@/theme/tokens';
+import { firstOf } from '@/state/store';
+import { C, dots, F, groupIN, hard } from '@/theme/tokens';
+import { Person } from '@/ui/Person';
+import { useGameStats } from '@/v2/context/GameStatsContext';
 import { A, Icon, ICON, Press, pushed, T, useStatusBar } from '@/ui/primitives';
 import { Screen, TabBar } from '@/ui/Screen';
 
-const TOP: [string, string, number, string, string, string][] = [
-  ['Aarav', 'AK', 1, '1,420', C.tomato, '#fff'],
-  ['You', 'YO', 2, '1,240', C.lime, C.ink],
-  ['Priya', 'PS', 3, '980', '#fff', C.ink],
-];
-
-function PointsRing({ pct }: { pct: number }) {
+function PointsRing({ pct, points }: { pct: number; points: number }) {
   const r = 20;
   const c = 2 * Math.PI * r;
   return (
@@ -25,7 +22,7 @@ function PointsRing({ pct }: { pct: number }) {
       </Svg>
       <View style={{ width: 62, height: 62, borderRadius: 31, borderWidth: 2, borderColor: C.ink, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
         <T f={F.d8} s={19} ls={-0.8}>
-          1,240
+          {groupIN(points)}
         </T>
         <T f={F.m4} s={7.5} ls={1}>
           POINTS
@@ -59,6 +56,7 @@ function GameCard({
   head,
   primary,
   onCreate,
+  onJoin,
 }: {
   open: boolean;
   bg: string;
@@ -67,6 +65,7 @@ function GameCard({
   head: ReactNode;
   primary: [string, string];
   onCreate: () => void;
+  onJoin: () => void;
 }) {
   return (
     <A
@@ -99,7 +98,7 @@ function GameCard({
             </T>
           </Press>
           <Press
-            onPress={onCreate}
+            onPress={onJoin}
             accessibilityRole="button"
             style={{ flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 14, backgroundColor: '#fff', borderWidth: 2, borderColor: C.ink }}>
             <T f={F.b7} s={14}>
@@ -122,6 +121,16 @@ const TILE: [string, string, number][] = [
 export default function Games() {
   const { top } = useStatusBar();
   const [open, setOpen] = useState<'npat' | 'trivia' | null>('npat');
+  const { leaderboard, myEntry, myRankDelta, breakdown, circle } = useGameStats();
+  const podium = leaderboard.slice(0, 3);
+  const myPts = myEntry?.stats.totalPoints ?? 0;
+  const top1 = leaderboard[0]?.stats.totalPoints ?? 0;
+  const toFirst = Math.max(0, top1 - myPts);
+  const net = (type: string) => breakdown.find((b) => b.gameType === type)?.net ?? 0;
+  const npatPts = Math.max(0, net('NPAT'));
+  const trivPts = Math.max(0, net('TRIVIA'));
+  const barMax = Math.max(1, npatPts + trivPts);
+  const BADGE = [C.tomato, C.lime, '#fff'];
   return (
     <Screen style={{ backgroundColor: C.paper, ...(dots(0.07, 16) as ViewStyle) }}>
       <ScrollView contentContainerStyle={{ paddingTop: top + 18, paddingHorizontal: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
@@ -131,7 +140,7 @@ export default function Games() {
           </T>
           <View style={{ backgroundColor: C.sun, borderWidth: 2, borderColor: C.ink, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 10, transform: [{ rotate: '3deg' }], ...hard(2) }}>
             <T f={F.m7} s={10.5} ls={1}>
-              6 SEATED
+              {circle.length} SEATED
             </T>
           </View>
         </View>
@@ -147,14 +156,19 @@ export default function Games() {
             </T>
           </View>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-            {TOP.map(([name, ini, rank, pts, bg, fg], i) => (
-              <A key={name} style={[{ flex: 1, alignItems: 'center', gap: 5 }, anim(skPop(), 0.4, 0.1 + i * 0.06, E.s14)]}>
+            {podium.map((e, i) => (
+              <A key={e.userId} style={[{ flex: 1, alignItems: 'center', gap: 5 }, anim(skPop(), 0.4, 0.1 + i * 0.06, E.s14)]}>
                 <View style={{ width: 54, height: 54 }}>
-                  <View style={{ width: 54, height: 54, borderRadius: 27, borderWidth: 2, borderColor: C.ink, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
-                    <T f={F.b8} s={16} c={fg}>
-                      {ini}
-                    </T>
-                  </View>
+                  <Person
+                    id={e.userId}
+                    name={e.isSelf ? 'You' : e.name}
+                    avatarUrl={e.avatarUrl}
+                    size={54}
+                    font={16}
+                    ink={i === 0 ? '#fff' : C.ink}
+                    bg={BADGE[i]}
+                    style={{ borderWidth: 2, borderColor: C.ink }}
+                  />
                   <View
                     style={{
                       position: 'absolute',
@@ -171,15 +185,15 @@ export default function Games() {
                       transform: [{ rotate: '-8deg' }],
                     }}>
                     <T f={F.m7} s={10}>
-                      {rank}
+                      {e.rank}
                     </T>
                   </View>
                 </View>
-                <T f={name === 'You' ? F.b8 : F.b6} s={12}>
-                  {name}
+                <T f={e.isSelf ? F.b8 : F.b6} s={12} lines={1}>
+                  {e.isSelf ? 'You' : firstOf(e.name)}
                 </T>
                 <T f={F.m4} s={10} c={C.ink60} style={{ marginTop: -3 }}>
-                  {pts}
+                  {groupIN(e.stats.totalPoints)}
                 </T>
               </A>
             ))}
@@ -209,23 +223,25 @@ export default function Games() {
             transform: [{ rotate: '-1deg' }],
             ...hard(4),
           }}>
-          <PointsRing pct={0.72} />
+          <PointsRing pct={top1 ? Math.min(1, myPts / top1) : 0} points={myPts} />
           <View style={{ flex: 1, gap: 8 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <T f={F.d8} s={20} c="#fff">
-                Rank #2
+                Rank #{myEntry?.rank ?? '–'}
               </T>
-              <View style={{ backgroundColor: C.lime, borderWidth: 2, borderColor: C.ink, borderRadius: 999, paddingVertical: 1, paddingHorizontal: 7 }}>
-                <T f={F.m7} s={10}>
-                  ▲ 1
-                </T>
-              </View>
+              {myRankDelta ? (
+                <View style={{ backgroundColor: myRankDelta > 0 ? C.lime : C.tomato, borderWidth: 2, borderColor: C.ink, borderRadius: 999, paddingVertical: 1, paddingHorizontal: 7 }}>
+                  <T f={F.m7} s={10}>
+                    {myRankDelta > 0 ? '▲' : '▼'} {Math.abs(myRankDelta)}
+                  </T>
+                </View>
+              ) : null}
             </View>
             <T f={F.m4} s={10} ls={0.8} c="#fff">
-              180 PTS TO #1
+              {myEntry?.rank === 1 ? 'TOP OF YOUR CIRCLE' : `${groupIN(toFirst)} PTS TO #1`}
             </T>
-            <Bar label="NPAT" pct={62} color={C.tomato} val="770" />
-            <Bar label="TRIVIA" pct={38} color={C.sun} val="470" />
+            <Bar label="NPAT" pct={(npatPts / barMax) * 100} color={C.tomato} val={groupIN(npatPts)} />
+            <Bar label="TRIVIA" pct={(trivPts / barMax) * 100} color={C.sun} val={groupIN(trivPts)} />
           </View>
         </View>
 
@@ -239,7 +255,8 @@ export default function Games() {
             tilt={-1.5}
             onToggle={() => setOpen((o) => (o === 'npat' ? null : 'npat'))}
             primary={[C.sun, C.ink]}
-            onCreate={() => router.push('/games/npat')}
+            onCreate={() => router.push({ pathname: '/games/npat', params: { tab: 'create' } })}
+            onJoin={() => router.push({ pathname: '/games/npat', params: { tab: 'join' } })}
             head={
               <>
                 <View style={{ flexDirection: 'row', gap: 3 }}>
@@ -270,7 +287,8 @@ export default function Games() {
             tilt={1.5}
             onToggle={() => setOpen((o) => (o === 'trivia' ? null : 'trivia'))}
             primary={[C.cobalt, '#fff']}
-            onCreate={() => router.push('/games/trivia')}
+            onCreate={() => router.push({ pathname: '/games/trivia', params: { tab: 'create' } })}
+            onJoin={() => router.push({ pathname: '/games/trivia', params: { tab: 'join' } })}
             head={
               <>
                 <View

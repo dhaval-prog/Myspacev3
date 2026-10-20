@@ -5,7 +5,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View, type ViewS
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import Svg from 'react-native-svg';
 
-import { firstOf, useStore } from '@/state/store';
+import { useStore } from '@/state/store';
+import { useAuth } from '@/v2/context/AuthContext';
 import { anim, skBlink, skShake } from '@/theme/anim';
 import { C, F, hard } from '@/theme/tokens';
 import { DrawPath } from '@/ui/kit';
@@ -83,14 +84,17 @@ export default function Login() {
   const [buzz, setBuzz] = useState<Buzz>('idle');
   const [shake, setShake] = useState(0);
   const [remember, setRemember] = useState(true);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+  const { signIn, resetPassword } = useAuth();
+  const [resetNote, setResetNote] = useState<string | null>(null);
   const t = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (t.current && clearTimeout(t.current)), []);
 
   const n = s.lpw.length;
   let lcd = 'WHO IS IT?';
-  if (buzz === 'err') lcd = 'HMM… WHO’S THERE?';
+  if (buzz === 'err') lcd = errMsg ? errMsg.toUpperCase() : 'HMM… WHO’S THERE?';
   else if (buzz === 'check') lcd = 'BZZZT… CHECKING';
-  else if (buzz === 'ok') lcd = 'WELCOME BACK, ' + firstOf(s.name).toUpperCase();
+  else if (buzz === 'ok') lcd = 'WELCOME BACK!';
   else if (focus === 'email') lcd = '> ' + s.email.slice(-18).toUpperCase();
   else if (focus === 'lpw') lcd = '> ' + '*'.repeat(Math.min(n, 16));
   const led = buzz === 'ok' ? '#3BE36A' : buzz === 'err' ? '#FF3B1F' : '#FFB020';
@@ -98,6 +102,7 @@ export default function Login() {
   const press = () => {
     if (buzz === 'check' || buzz === 'ok') return;
     if (t.current) clearTimeout(t.current);
+    setErrMsg(null);
     if (!/^\S+@\S+\.\S+$/.test(s.email) || n < 1) {
       setBuzz('err');
       setShake((x) => x + 1);
@@ -105,10 +110,17 @@ export default function Login() {
       return;
     }
     setBuzz('check');
-    t.current = setTimeout(() => {
+    signIn(s.email, s.lpw).then(({ error }) => {
+      if (error) {
+        setErrMsg(error);
+        setBuzz('err');
+        setShake((x) => x + 1);
+        t.current = setTimeout(() => setBuzz('idle'), 2200);
+        return;
+      }
+      // The new session swaps in the signed-in app and lands on Chats.
       setBuzz('ok');
-      t.current = setTimeout(() => router.replace('/success'), 900);
-    }, 1000);
+    });
   };
 
   const fields: ['email' | 'lpw', string][] = [
@@ -294,9 +306,21 @@ export default function Login() {
                       Remember me
                     </T>
                   </Press>
-                  <T f={F.b7} s={13.5} style={{ textDecorationLine: 'underline' }}>
-                    Forgot password?
-                  </T>
+                  <Press
+                    accessibilityRole="button"
+                    onPress={() => {
+                      if (!/^\S+@\S+\.\S+$/.test(s.email)) return setResetNote('Type your email first.');
+                      resetPassword(s.email).then(({ error }) => setResetNote(error ?? 'Reset link sent — check your mail.'));
+                    }}>
+                    <T f={F.b7} s={13.5} style={{ textDecorationLine: 'underline' }}>
+                      Forgot password?
+                    </T>
+                  </Press>
+                  {resetNote ? (
+                    <T f={F.b6} s={11.5} c="#5d616a" style={{ maxWidth: 150 }}>
+                      {resetNote}
+                    </T>
+                  ) : null}
                 </View>
                 <View style={{ width: 96, height: 96 }}>
                   {buzz === 'check' ? (

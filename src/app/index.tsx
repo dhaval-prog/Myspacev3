@@ -1,11 +1,13 @@
 // 01 Splash — logo stamps in; tap the stickers to peel them and learn what the app does.
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { anim, E, loop, skJig, skPeelOff, skPopR, skSlap, skSpin, skTwinkle, skUp } from '@/theme/anim';
+import { useStore } from '@/state/store';
 import { C, F, hard } from '@/theme/tokens';
+import { useAuth } from '@/v2/context/AuthContext';
 import { OutlinedText, Sheen, STAR4 } from '@/ui/kit';
 import { A, Icon, ICON, Press, pushed, Stage, T, useY } from '@/ui/primitives';
 import { Screen } from '@/ui/Screen';
@@ -81,7 +83,15 @@ const SPARKS: [number, number, number, number][] = [
   [-24, 128, 18, 1.2],
 ];
 
-export default function Splash() {
+export default function Index() {
+  const { session } = useAuth();
+  const { afterAuth } = useStore();
+  // Signed in: skip onboarding. Right after sign-up we land on the pass instead of Chats.
+  if (session) return <Redirect href={(afterAuth || '/chat') as any} />;
+  return <Splash />;
+}
+
+function Splash() {
   const y = useY();
   const [peeled, setPeeled] = useState<Record<number, boolean>>({});
   const [slap, setSlap] = useState<Record<number, number>>({});

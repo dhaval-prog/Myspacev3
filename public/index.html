@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <!-- `maximum-scale`/`minimum-scale`/`user-scalable=no` lock the page at 1x — without them,
+         iOS Safari (and standalone/home-screen PWA mode, which this app opts into below) can get
+         its viewport scale stuck below 1 after a text input is focused then blurred, leaving the
+         whole app rendered shrunk into a corner until a manual pinch-zoom or reload. Pinch-zoom
+         isn't a feature this app relies on, so trading it away avoids the whole bug class.
+         `viewport-fit=cover` lets `env(safe-area-inset-*)` resolve on notched devices. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no"
+    />
+    <title>%WEB_TITLE%</title>
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+
+    <!-- "Add to Home Screen" icon for Android/Chrome (via the web manifest) and other PWA-aware browsers. -->
+    <link rel="manifest" href="/manifest.json" />
+    <!-- iOS Safari ignores the manifest for its home-screen icon and looks for this instead. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Opts the page into iOS's standalone (no browser chrome) mode when launched from the home screen. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#2B4BFF" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Myspace" />
+  </head>
+
+  <body>
+    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+
+    <!-- iOS Safari's keyboard-avoidance shifts the whole page up while a text input is focused
+         (there's nothing to opt out of — it's not `body`'s own scroll, which `overflow: hidden`
+         above already blocks, but the browser's outer visual-viewport offset). Once the keyboard
+         closes, that offset is supposed to unwind on its own; in practice — especially in
+         standalone/home-screen mode with `user-scalable=no` above, which removes the pinch-zoom
+         mechanism iOS otherwise reconciles this through — it can get stuck, leaving the header
+         scrolled off the top of the screen until a manual scroll or reload. Forcing the scroll
+         position back to the origin whenever the visual viewport's own size/offset settles (i.e.
+         the keyboard finished animating open or closed) is the standard fix: a no-op on every
+         normal resize, and a correction on exactly the runs that got stuck. -->
+    <script>
+      (function () {
+        var reset = function () {
+          window.scrollTo(0, 0);
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        };
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', function () {
+            setTimeout(reset, 50);
+          });
+          window.visualViewport.addEventListener('scroll', function () {
+            setTimeout(reset, 50);
+          });
+        }
+        document.addEventListener(
+          'focusout',
+          function () {
+            setTimeout(reset, 50);
+            setTimeout(reset, 350);
+          },
+          true,
+        );
+      })();
+    </script>
+  </body>
+</html>

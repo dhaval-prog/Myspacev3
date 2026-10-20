@@ -5,10 +5,21 @@ import { initialsOf, SWATCHES, useStore } from '@/state/store';
 import { F } from '@/theme/tokens';
 import { T } from './primitives';
 
-/** Round sticker avatar (photo or initials). Shared with the pass screen. */
-export function AvatarFace({ size, ring, font }: { size: number; ring: number; font: number }) {
+type Props = {
+  size: number;
+  ring: number;
+  font: number;
+  /** Overrides (signed-in profile). Default to the onboarding draft. */
+  name?: string;
+  color?: number;
+  photo?: string | null;
+};
+
+/** Round sticker avatar (photo or initials) on the user's chosen colour. */
+export function AvatarFace({ size, ring, font, name, color, photo }: Props) {
   const s = useStore();
-  const [bg, fg] = SWATCHES[s.av];
+  const [bg, fg] = SWATCHES[(color ?? s.av) % SWATCHES.length];
+  const uri = photo !== undefined ? photo : s.photo;
   return (
     <View
       style={{
@@ -22,11 +33,11 @@ export function AvatarFace({ size, ring, font }: { size: number; ring: number; f
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-      {s.photo ? (
-        <Image source={{ uri: s.photo }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+      {uri ? (
+        <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
       ) : (
         <T f={F.d8} s={font} c={fg}>
-          {initialsOf(s.name || 'Friend')}
+          {initialsOf(name ?? (s.name || 'Friend'))}
         </T>
       )}
     </View>

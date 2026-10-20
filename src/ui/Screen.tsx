@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 
 import { anim, E, skUp } from '@/theme/anim';
 import { C, F } from '@/theme/tokens';
-import { A, Icon, ICON, Press, StatusBarArt, T } from './primitives';
+import { A, Icon, ICON, Press, T } from './primitives';
 
 type ScreenProps = {
   style?: StyleProp<ViewStyle>;
@@ -21,7 +21,6 @@ export function Screen({ style, bar = C.ink, children }: ScreenProps) {
     <View style={[{ flex: 1, overflow: 'hidden', backgroundColor: C.paper }, style]}>
       <StatusBar style={light ? 'light' : 'dark'} />
       {children}
-      <StatusBarArt color={bar} />
     </View>
   );
 }

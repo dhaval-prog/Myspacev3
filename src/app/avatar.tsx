@@ -1,11 +1,12 @@
 // 04 Pick your look — add a photo, pick a colour; the die-cut sticker re-paints.
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { View, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { SWATCH_NAMES, SWATCHES, useStore } from '@/state/store';
+import { supabase } from '@/v2/lib/supabase';
 import { AvatarFace } from '@/ui/AvatarFace';
 import { anim, E, loop, skRepaint, skTwinkle } from '@/theme/anim';
 import { C, F, hard } from '@/theme/tokens';
@@ -18,21 +19,36 @@ export default function Avatar() {
   const { top } = useStatusBar();
   const [rp, setRp] = useState(0);
   const [loading, setLoading] = useState(false);
-  const t = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => void (t.current && clearTimeout(t.current)), []);
+  const [error, setError] = useState<string | null>(null);
   const [avBg] = SWATCHES[s.av];
 
   const pick = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.85 });
     if (!res.canceled && res.assets[0]) s.set({ photo: res.assets[0].uri });
   };
-  const submit = () => {
+  // Creates the real account. With email confirmation on, there's no session yet and we go to
+  // "Check mail"; otherwise the new session takes over and the app lands on the pass (/success).
+  const submit = async () => {
     if (loading) return;
+    if (!s.name.trim() || !s.email.trim() || s.pw.length < 8) {
+      setError('Finish the sign-up steps first.');
+      return;
+    }
     setLoading(true);
-    t.current = setTimeout(() => {
-      setLoading(false);
-      router.push('/verify');
-    }, 1000);
+    setError(null);
+    s.set({ afterAuth: '/success' });
+    const { data, error: err } = await supabase.auth.signUp({
+      email: s.email.trim(),
+      password: s.pw,
+      options: { data: { full_name: s.name.trim(), avatar_color: s.av } },
+    });
+    setLoading(false);
+    if (err) {
+      s.set({ afterAuth: null });
+      setError(err.message);
+      return;
+    }
+    if (!data.session) router.push('/verify');
   };
 
   return (
@@ -218,6 +234,11 @@ export default function Avatar() {
       </View>
 
       <View style={{ flex: 1 }} />
+      {error ? (
+        <T f={F.b6} s={13.5} c="#C8391F" center style={{ marginBottom: 10 }}>
+          {error}
+        </T>
+      ) : null}
       <Press
         onPress={submit}
         accessibilityRole="button"

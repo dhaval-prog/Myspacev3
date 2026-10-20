@@ -1,0 +1,513 @@
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
+import { useFriends } from './FriendsContext';
+import { computeNextTrigger } from '../utils/throwAlerts';
+import { useCachedBootstrap } from '../hooks/useCachedBootstrap';
+import { writeCache } from '../utils/persistedCache';
+import type { AlertSchedule, ComposeDraft, LocationVisibility, MediaTrim, ThrowFriend, ThrowLetter, ThrowLocation, ThrowRow } from '../types/throw';
+
+/** Everything `refresh` loads in one round-trip, cached together so a repeat app open can hydrate
+ * the whole screen — map pins, streaks, my own profile — in one shot instead of a blank screen
+ * while the real fetch is still in flight. */
+interface ThrowCacheSnapshot {
+  myLocation: ThrowLocation | null;
+  myProfile: { name: string; avatarUrl: string | null };
+  friendLocations: Record<string, ThrowLocation>;
+  rows: ThrowRow[];
+  streaksByCounterpart: Record<string, number>;
+  locationVisibility: LocationVisibility;
+}
+
+function warn(action: string, error: { message: string } | null) {
+  if (error) console.warn(`[Throw] ${action} failed:`, error.message);
+}
+
+/** Supabase-js surfaces a raw network-layer failure (a fetch that never reached the server —
+ * offline, a dropped cell connection, etc.) as a bare `TypeError` whose message is whatever the
+ * platform's fetch implementation happened to say ("Load failed" on iOS/WebKit, "Network request
+ * failed" on Android/Hermes) — technically accurate but meaningless to a user staring at the
+ * screen. Swaps those specific messages for one they can act on; anything else (a real Postgrest/
+ * RLS error with its own clear message) passes through unchanged. */
+function friendlyErrorMessage(message: string): string {
+  if (/load failed|network request failed|failed to fetch/i.test(message)) {
+    return "Couldn't reach the server — check your connection and try again.";
+  }
+  return message;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** UTC calendar date as YYYY-MM-DD, matching the server's `current_date` (also UTC) — the streak
+ * only cares about whole days apart, not exact instants, so this stays a plain date comparison
+ * rather than pulling in timezone handling. */
+function utcDateString(offsetDays: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Same reasoning as FriendsContext's own copy: a naive "everything after the last dot" breaks on
+ * web, where expo-image-picker hands back an extension-less `blob:` URI. */
+function extFromBlob(localUri: string, mimeType: string): string {
+  const mimeExt = mimeType.split('/')[1]?.split('+')[0];
+  if (mimeExt && /^[a-z0-9]{2,5}$/i.test(mimeExt)) return mimeExt.toLowerCase() === 'jpeg' ? 'jpg' : mimeExt.toLowerCase();
+  const match = localUri.split('?')[0].match(/\.([a-z0-9]{2,5})$/i);
+  return match ? match[1].toLowerCase() : 'jpg';
+}
+
+/** Zips the row's two parallel trim-ms arrays back into one array of nullable {startMs,endMs}
+ * objects, index-aligned with photoUrls (padding/truncating defensively — a row inserted before
+ * this feature shipped, or a future mismatch, should never crash the mapper). */
+function toPhotoTrims(photoUrls: string[], startMs: number[] | null, endMs: number[] | null): (MediaTrim | null)[] {
+  return photoUrls.map((_, i) => {
+    const s = startMs?.[i];
+    const e = endMs?.[i];
+    return s != null && e != null ? { startMs: s, endMs: e } : null;
+  });
+}
+
+function toLetter(row: ThrowRow, myId: string, nameFor: (userId: string) => string, avatarFor: (userId: string) => string | null): ThrowLetter {
+  const direction: 'sent' | 'received' = row.sender_id === myId ? 'sent' : 'received';
+  const counterpartId = direction === 'sent' ? row.recipient_id : row.sender_id;
+  const photoUrls = row.photo_urls ?? (row.photo_url ? [row.photo_url] : []);
+  return {
+    id: row.id,
+    senderId: row.sender_id,
+    recipientId: row.recipient_id,
+    counterpartId,
+    counterpartName: nameFor(counterpartId),
+    counterpartAvatarUrl: avatarFor(counterpartId),
+    direction,
+    messageText: row.message_text,
+    strokes: row.strokes,
+    penColor: row.pen_color,
+    photoUrls,
+    photoTrims: toPhotoTrims(photoUrls, row.photo_trim_start_ms, row.photo_trim_end_ms),
+    senderCity: row.sender_city,
+    senderCountry: row.sender_country,
+    senderLatitude: row.sender_latitude,
+    senderLongitude: row.sender_longitude,
+    recipientCity: row.recipient_city,
+    recipientCountry: row.recipient_country,
+    recipientLatitude: row.recipient_latitude,
+    recipientLongitude: row.recipient_longitude,
+    distanceMiles: row.distance_miles,
+    status: row.status,
+    createdAt: row.created_at,
+    readAt: row.read_at,
+    repliedToThrowId: row.replied_to_throw_id,
+    alertSchedule:
+      row.alert_recurrence_type != null
+        ? {
+            recurrence: row.alert_recurrence_type,
+            hour: row.alert_hour ?? 0,
+            minute: row.alert_minute ?? 0,
+            daysOfWeek: row.alert_days_of_week ?? [],
+            dayOfMonth: row.alert_day_of_month ?? 1,
+          }
+        : null,
+    alertConfirmed: row.alert_confirmed,
+  };
+}
+
+interface ThrowContextValue {
+  loading: boolean;
+  myLocation: ThrowLocation | null;
+  /** My own display name/avatar, for the self-reminder "Myself" pseudo-contact on the map. */
+  myName: string;
+  myAvatarUrl: string | null;
+  setMyLocation: (loc: ThrowLocation) => Promise<{ error: string | null }>;
+  /** Who can see my Throw location on the Friends Map — defaults to 'friends' (today's behavior).
+   * See the LocationVisibility type for what each value means. */
+  locationVisibility: LocationVisibility;
+  setLocationVisibility: (visibility: LocationVisibility) => void;
+  /** Accepted friends merged with their Throw location, if they've set one. */
+  friends: ThrowFriend[];
+  /** Every letter involving me, newest first. */
+  letters: ThrowLetter[];
+  /** Letters I received, newest first. */
+  inbox: ThrowLetter[];
+  unreadCount: number;
+  /** How many of a specific counterpart's letters to me are still unread — the per-contact count
+   * behind the small badge on their avatar circle (RecipientCarousel/ContactsRail), as opposed to
+   * unreadCount's own app-wide total. */
+  unreadCountFor: (counterpartId: string) => number;
+  /** Consecutive calendar days (UTC) I've thrown at least one letter to this specific counterpart,
+   * ending today or yesterday — 0 once a day's gone by with nothing thrown to them, or if we've
+   * never thrown to them at all. */
+  streakFor: (counterpartId: string) => number;
+  sendThrow: (draft: ComposeDraft) => Promise<{ error: string | null; letter?: ThrowLetter }>;
+  /** Uploads a local photo (camera or library) to this user's own throw-media folder, returning
+   * its public URL for inclusion in a ComposeDraft. Separate from sendThrow itself since the
+   * photo is picked/previewed before the user actually throws. */
+  uploadPhoto: (localUri: string) => Promise<{ url: string | null; error: string | null }>;
+  markRead: (throwId: string) => Promise<void>;
+  /** Removes a letter from my own view (inbox or sent list, whichever it's in) — the other
+   * party's copy is untouched until they delete it too. */
+  deleteThrow: (throwId: string) => Promise<{ error: string | null }>;
+  /** Confirms a received letter's own attached reminder request — creates a real throw_alerts row
+   * for me at the given schedule and marks the letter's request confirmed, atomically. */
+  confirmThrowAlert: (throwId: string, schedule: AlertSchedule) => Promise<{ error: string | null }>;
+  refresh: () => Promise<void>;
+  /** The most recent letter someone else threw me, surfaced the instant its realtime INSERT
+   * arrives (not just folded into the next `refresh()`) — lets ThrowHomeScreen show an "X sent you
+   * a letter" toast while the recipient is already sitting on the map, rather than them only
+   * finding out once they happen to open the inbox. Null once dismissed (see
+   * clearLatestIncoming) or whenever there's nothing new to show. */
+  latestIncoming: ThrowLetter | null;
+  /** Dismisses the current latestIncoming toast — called on tap-to-open and on its own auto-expiry. */
+  clearLatestIncoming: () => void;
+}
+
+const ThrowContext = createContext<ThrowContextValue | null>(null);
+
+/** Scoped around just the Throw screen tree (not mounted at app root) — mirrors LocationContext's pattern. */
+export function ThrowProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const { friends: fsFriends } = useFriends();
+  const myId = user?.id ?? null;
+
+  const [loading, setLoading] = useState(true);
+  const [myLocation, setMyLocationState] = useState<ThrowLocation | null>(null);
+  const [locationVisibility, setLocationVisibilityState] = useState<LocationVisibility>('friends');
+  const [myProfile, setMyProfile] = useState<{ name: string; avatarUrl: string | null }>({ name: 'Myself', avatarUrl: null });
+  const [friendLocations, setFriendLocations] = useState<Record<string, ThrowLocation>>({});
+  const [rows, setRows] = useState<ThrowRow[]>([]);
+  const [streaksByCounterpart, setStreaksByCounterpart] = useState<Record<string, number>>({});
+  const [latestIncoming, setLatestIncoming] = useState<ThrowLetter | null>(null);
+  const clearLatestIncoming = useCallback(() => setLatestIncoming(null), []);
+  const hasLoadedRef = useRef(false);
+  // Mirrors myLocation/myProfile outside React state, purely so `refresh` can fold whichever of
+  // the two didn't change this round into its own cache write below — without this, that field
+  // would have to be a dependency of `refresh` itself, and since `refresh` writes it, that would
+  // give the effect that calls `refresh` a new identity every time it runs, looping forever.
+  const latestMyLocationRef = useRef<ThrowLocation | null>(null);
+  const latestMyProfileRef = useRef<{ name: string; avatarUrl: string | null }>({ name: 'Myself', avatarUrl: null });
+  const latestLocationVisibilityRef = useRef<LocationVisibility>('friends');
+
+  const nameFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.name ?? 'Someone', [fsFriends]);
+  const avatarFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.avatarUrl ?? null, [fsFriends]);
+
+  // Hydrates every piece `refresh` loads from whatever was cached last time, so a repeat app open
+  // shows the map/letters/streaks instantly instead of a blank screen while the network round-trip
+  // below is still in flight — see useCachedBootstrap's own doc comment.
+  const cacheReady = useCachedBootstrap<ThrowCacheSnapshot>(myId, 'throw', (cached) => {
+    setMyLocationState(cached.myLocation);
+    latestMyLocationRef.current = cached.myLocation;
+    setLocationVisibilityState(cached.locationVisibility ?? 'friends');
+    latestLocationVisibilityRef.current = cached.locationVisibility ?? 'friends';
+    setMyProfile(cached.myProfile);
+    latestMyProfileRef.current = cached.myProfile;
+    setFriendLocations(cached.friendLocations);
+    setRows(cached.rows);
+    setStreaksByCounterpart(cached.streaksByCounterpart);
+    hasLoadedRef.current = true;
+    setLoading(false);
+  });
+
+  const refresh = useCallback(async () => {
+    if (!myId) return;
+    // Only the very first load blanks the screen — a poll or realtime-triggered refresh updates
+    // data quietly in the background so it never interrupts whatever's on screen (mid-gesture
+    // composing, an in-progress flight animation, etc.). A cache hit (see cacheReady above)
+    // counts as a first load for this purpose too, since the screen's already showing something.
+    if (!hasLoadedRef.current) setLoading(true);
+    const [meRes, throwsRes, streakRes, profileRes] = await Promise.all([
+      supabase.from('throw_profiles').select('city,country,latitude,longitude,updated_at,location_visibility').eq('user_id', myId).maybeSingle(),
+      supabase.from('throws').select('*').or(`sender_id.eq.${myId},recipient_id.eq.${myId}`).order('created_at', { ascending: false }),
+      supabase.from('throw_streaks').select('counterpart_id,current_streak,last_throw_date').eq('user_id', myId),
+      supabase.from('profiles').select('full_name,avatar_url').eq('id', myId).maybeSingle(),
+    ]);
+    warn('load my location', meRes.error);
+    warn('load throws', throwsRes.error);
+    warn('load throw streaks', streakRes.error);
+    warn('load my profile', profileRes.error);
+
+    if (meRes.data) {
+      const d = meRes.data as { city: string; country: string; latitude: number; longitude: number; updated_at: string | null; location_visibility: LocationVisibility };
+      const loc = { city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude, updatedAt: d.updated_at ?? undefined };
+      setMyLocationState(loc);
+      latestMyLocationRef.current = loc;
+      const visibility = d.location_visibility ?? 'friends';
+      setLocationVisibilityState(visibility);
+      latestLocationVisibilityRef.current = visibility;
+    }
+    if (profileRes.data) {
+      const p = profileRes.data as { full_name: string | null; avatar_url: string | null };
+      const profile = { name: p.full_name?.trim() || 'Myself', avatarUrl: p.avatar_url };
+      setMyProfile(profile);
+      latestMyProfileRef.current = profile;
+    }
+    // Each row's stored streak only advances when a throw to that counterpart actually happens —
+    // if a whole day's gone by with nothing thrown to them since, it's lapsed even though the row
+    // hasn't been touched, so that's checked here at read time rather than needing a write just to
+    // notice the gap.
+    const streakRows = (streakRes.data as { counterpart_id: string; current_streak: number; last_throw_date: string }[] | null) ?? [];
+    const streakMap: Record<string, number> = {};
+    for (const r of streakRows) {
+      const inStreak = r.last_throw_date === utcDateString(0) || r.last_throw_date === utcDateString(-1);
+      streakMap[r.counterpart_id] = inStreak ? r.current_streak : 0;
+    }
+    setStreaksByCounterpart(streakMap);
+    // A letter deleted from "my" side (sender or recipient, whichever I am) stays in the shared
+    // row for the other person until they've deleted it too (see delete_throw) — so filtering it
+    // out of my own list happens here, client-side, rather than in the query itself.
+    const visibleRows = ((throwsRes.data as ThrowRow[] | null) ?? []).filter((r) => {
+      if (r.sender_id === myId && r.deleted_by_sender) return false;
+      if (r.recipient_id === myId && r.deleted_by_recipient) return false;
+      return true;
+    });
+    setRows(visibleRows);
+
+    const friendIds = fsFriends.map((f) => f.userId);
+    let friendLocationsSnapshot: Record<string, ThrowLocation> = {};
+    if (friendIds.length > 0) {
+      const { data: locRows, error: locErr } = await supabase
+        .from('throw_profiles')
+        .select('user_id,city,country,latitude,longitude,updated_at')
+        .in('user_id', friendIds);
+      warn('load friend locations', locErr);
+      const map: Record<string, ThrowLocation> = {};
+      for (const r of (locRows as { user_id: string; city: string; country: string; latitude: number; longitude: number; updated_at: string | null }[] | null) ?? []) {
+        map[r.user_id] = { city: r.city, country: r.country, latitude: r.latitude, longitude: r.longitude, updatedAt: r.updated_at ?? undefined };
+      }
+      friendLocationsSnapshot = map;
+      setFriendLocations(map);
+    } else {
+      setFriendLocations({});
+    }
+    hasLoadedRef.current = true;
+    setLoading(false);
+    writeCache<ThrowCacheSnapshot>(myId, 'throw', {
+      myLocation: latestMyLocationRef.current,
+      myProfile: latestMyProfileRef.current,
+      friendLocations: friendLocationsSnapshot,
+      rows: visibleRows,
+      streaksByCounterpart: streakMap,
+      locationVisibility: latestLocationVisibilityRef.current,
+    });
+  }, [myId, fsFriends]);
+
+  // Waits for the cache check above to settle (hit or miss) before deciding whether this is a
+  // first-ever load that should show the normal loading state — see useCachedBootstrap's own doc
+  // comment on why the ordering matters.
+  useEffect(() => {
+    if (!cacheReady) return;
+    refresh();
+  }, [cacheReady, refresh]);
+
+  useEffect(() => {
+    if (!myId) return;
+    const channel = supabase
+      .channel(`throws-${myId}`)
+      // Split out from a plain '*' so an INSERT's own `payload.new` can be read directly for the
+      // latestIncoming toast below — UPDATE/DELETE (read receipts, deletes) still just reload.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'throws', filter: `recipient_id=eq.${myId}` }, (payload) => {
+        const row = payload.new as ThrowRow;
+        // Excludes a self-reminder's own throw (sender_id === recipient_id === myId) — that has
+        // its own existing UX (the peek banner), not this toast, which is specifically "someone
+        // else sent you something."
+        if (row.sender_id !== myId) setLatestIncoming(toLetter(row, myId, nameFor, avatarFor));
+        refresh();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'throws', filter: `recipient_id=eq.${myId}` }, () => refresh())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'throws', filter: `recipient_id=eq.${myId}` }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'throws', filter: `sender_id=eq.${myId}` }, () => refresh())
+      .subscribe();
+    const poll = setInterval(refresh, 15000);
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+    };
+  }, [myId, refresh]);
+
+  const setMyLocation = useCallback(
+    async (loc: ThrowLocation) => {
+      if (!myId) return { error: 'not signed in' };
+      const attempt = () =>
+        supabase
+          .from('throw_profiles')
+          .upsert({ user_id: myId, city: loc.city, country: loc.country, latitude: loc.latitude, longitude: loc.longitude, updated_at: new Date().toISOString() });
+      // A transient network blip (weak signal, a dropped cell connection right as the request
+      // goes out) is common right here — this is usually the very first network call of a fresh
+      // app session, before the connection's had a chance to settle. One retry after a short
+      // pause rides out most of those rather than bouncing the user straight to a raw error.
+      let { error } = await attempt();
+      if (error && /load failed|network request failed|failed to fetch/i.test(error.message)) {
+        await wait(1200);
+        ({ error } = await attempt());
+      }
+      if (error) return { error: friendlyErrorMessage(error.message) };
+      setMyLocationState(loc);
+      return { error: null };
+    },
+    [myId],
+  );
+
+  const setLocationVisibility = useCallback(
+    (visibility: LocationVisibility) => {
+      setLocationVisibilityState(visibility);
+      latestLocationVisibilityRef.current = visibility;
+      if (!myId) return;
+      // update, not upsert — throw_profiles has other NOT NULL columns (city/country/lat/long)
+      // that an upsert's INSERT path would need, even though this row always already exists by
+      // the time Settings is reachable (ThrowNavigator requires myLocation to be set first).
+      supabase
+        .from('throw_profiles')
+        .update({ location_visibility: visibility })
+        .eq('user_id', myId)
+        .then(({ error }) => {
+          if (error) console.warn('[Throw] failed to save location visibility:', error.message);
+        });
+    },
+    [myId],
+  );
+
+  const sendThrow = useCallback(
+    async (draft: ComposeDraft) => {
+      // Two parallel integer[] columns, index-aligned with photo_urls (same convention the table
+      // already uses for photo_urls itself) — null entries mean "no trim" for that attachment.
+      // Sent as null altogether (not two arrays of all-null) whenever nothing needs trimming, so a
+      // draft with no video attachments doesn't grow the row for no reason.
+      const hasAnyTrim = draft.photoTrims?.some((t) => t != null) ?? false;
+      const alertSchedule = draft.alertSchedule ?? null;
+      const { data, error } = await supabase.rpc('send_throw', {
+        p_recipient_id: draft.recipientId,
+        p_message_text: draft.messageText,
+        p_strokes: draft.strokes,
+        p_pen_color: draft.penColor,
+        p_replied_to_throw_id: draft.repliedToThrowId ?? null,
+        p_photo_urls: draft.photoUrls.length > 0 ? draft.photoUrls : null,
+        p_photo_trim_start_ms: hasAnyTrim ? draft.photoUrls.map((_, i) => draft.photoTrims?.[i]?.startMs ?? null) : null,
+        p_photo_trim_end_ms: hasAnyTrim ? draft.photoUrls.map((_, i) => draft.photoTrims?.[i]?.endMs ?? null) : null,
+        p_alert_recurrence_type: alertSchedule?.recurrence ?? null,
+        p_alert_days_of_week: alertSchedule?.recurrence === 'weekly' ? alertSchedule.daysOfWeek : null,
+        p_alert_day_of_month: alertSchedule?.recurrence === 'monthly' ? alertSchedule.dayOfMonth : null,
+        p_alert_hour: alertSchedule?.hour ?? null,
+        p_alert_minute: alertSchedule?.minute ?? null,
+      });
+      if (error) return { error: error.message };
+      // Surfaces the letter in Orbit's Chats too, as the same airmail letter card the Chats
+      // redesign uses for a group's own thrown letters — not a plain system note, so the title and
+      // sender's city (the postmark's place tag) carry through. Best-effort: a connection between
+      // the two might not resolve here (e.g. Throw's own friend list is slightly stale), and the
+      // throw itself has already succeeded either way, so failures here are only warned, never
+      // surfaced as an error to the user.
+      const connectionId = fsFriends.find((f) => f.userId === draft.recipientId)?.connectionId;
+      if (connectionId && myId) {
+        const throwRow = data as ThrowRow;
+        const title = draft.messageText?.trim().slice(0, 60) || 'A letter';
+        const { error: msgErr } = await supabase
+          .from('direct_messages')
+          .insert({ connection_id: connectionId, sender_id: myId, kind: 'letter', text: title, attachment_url: throwRow.sender_city || null });
+        warn('post throw chat message', msgErr);
+      }
+      await refresh();
+      return { error: null, letter: toLetter(data as ThrowRow, myId ?? '', nameFor, avatarFor) };
+    },
+    [myId, nameFor, avatarFor, refresh, fsFriends],
+  );
+
+  const uploadPhoto = useCallback(
+    async (localUri: string): Promise<{ url: string | null; error: string | null }> => {
+      if (!myId) return { url: null, error: 'Not signed in.' };
+      try {
+        const response = await fetch(localUri);
+        const blob = await response.blob();
+        const ext = extFromBlob(localUri, blob.type || 'image/jpeg');
+        const path = `${myId}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('throw-media').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+        if (upErr) return { url: null, error: upErr.message };
+        const { data: pub } = supabase.storage.from('throw-media').getPublicUrl(path);
+        return { url: pub.publicUrl, error: null };
+      } catch (e) {
+        return { url: null, error: e instanceof Error ? e.message : 'Could not upload that photo.' };
+      }
+    },
+    [myId],
+  );
+
+  const markRead = useCallback(
+    async (throwId: string) => {
+      const { error } = await supabase.rpc('mark_throw_read', { p_throw_id: throwId });
+      warn('mark_throw_read', error);
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const deleteThrow = useCallback(
+    async (throwId: string): Promise<{ error: string | null }> => {
+      const { error } = await supabase.rpc('delete_throw', { p_throw_id: throwId });
+      if (error) return { error: error.message };
+      await refresh();
+      return { error: null };
+    },
+    [refresh],
+  );
+
+  // Confirms a letter's own attached reminder request (see ThrowLetter's own alertSchedule) —
+  // the RPC itself does the actual work (inserting the recipient's real throw_alerts row and
+  // marking this throw confirmed, atomically), this just supplies the one thing that has to be
+  // computed client-side: the same next_trigger_at math a self-reminder's own createAlert already
+  // uses, so a confirmed letter's alert behaves identically to one you scheduled for yourself.
+  const confirmThrowAlert = useCallback(
+    async (throwId: string, schedule: AlertSchedule): Promise<{ error: string | null }> => {
+      const nextTrigger = computeNextTrigger(schedule);
+      const { error } = await supabase.rpc('confirm_throw_alert', { p_throw_id: throwId, p_next_trigger_at: nextTrigger.toISOString() });
+      if (error) return { error: error.message };
+      await refresh();
+      return { error: null };
+    },
+    [refresh],
+  );
+
+  const letters = useMemo(() => rows.map((r) => toLetter(r, myId ?? '', nameFor, avatarFor)), [rows, myId, nameFor, avatarFor]);
+  const inbox = useMemo(() => letters.filter((l) => l.direction === 'received'), [letters]);
+  const unreadCount = useMemo(() => inbox.filter((l) => l.status === 'thrown').length, [inbox]);
+  const unreadCountFor = useCallback(
+    (counterpartId: string) => inbox.filter((l) => l.counterpartId === counterpartId && l.status === 'thrown').length,
+    [inbox],
+  );
+
+  const friends: ThrowFriend[] = useMemo(
+    () => fsFriends.map((f) => ({ userId: f.userId, name: f.name, avatarUrl: f.avatarUrl, location: friendLocations[f.userId] ?? null })),
+    [fsFriends, friendLocations],
+  );
+
+  const streakFor = useCallback((counterpartId: string) => streaksByCounterpart[counterpartId] ?? 0, [streaksByCounterpart]);
+
+  const value: ThrowContextValue = {
+    loading,
+    myLocation,
+    myName: myProfile.name,
+    myAvatarUrl: myProfile.avatarUrl,
+    setMyLocation,
+    locationVisibility,
+    setLocationVisibility,
+    friends,
+    letters,
+    inbox,
+    unreadCount,
+    unreadCountFor,
+    streakFor,
+    sendThrow,
+    uploadPhoto,
+    markRead,
+    deleteThrow,
+    confirmThrowAlert,
+    refresh,
+    latestIncoming,
+    clearLatestIncoming,
+  };
+  return <ThrowContext.Provider value={value}>{children}</ThrowContext.Provider>;
+}
+
+export function useThrow(): ThrowContextValue {
+  const ctx = useContext(ThrowContext);
+  if (!ctx) throw new Error('useThrow must be used within a ThrowProvider');
+  return ctx;
+}
