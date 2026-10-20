@@ -15,6 +15,43 @@
     />
     <title>%WEB_TITLE%</title>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <!-- App fonts: Latin-subset WOFF2 (scripts/build-web-fonts.py). The first screen's fonts are
+         preloaded so they download alongside the app code instead of after it. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/BricolageGrotesque_700Bold.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/BricolageGrotesque_800ExtraBold.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/SpaceMono_400Regular.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/SpaceMono_700Bold.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/Figtree_400Regular.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/Figtree_500Medium.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/Figtree_600SemiBold.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/Figtree_700Bold.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/Figtree_800ExtraBold.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/DMMono_400Regular.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/DMMono_500Medium.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/Caveat_700Bold.woff2" crossorigin />
+    <style id="app-fonts">
+      @font-face { font-family: 'BricolageGrotesque_700Bold'; src: url('/fonts/BricolageGrotesque_700Bold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'BricolageGrotesque_800ExtraBold'; src: url('/fonts/BricolageGrotesque_800ExtraBold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'SpaceMono_400Regular'; src: url('/fonts/SpaceMono_400Regular.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'SpaceMono_700Bold'; src: url('/fonts/SpaceMono_700Bold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Figtree_400Regular'; src: url('/fonts/Figtree_400Regular.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Figtree_500Medium'; src: url('/fonts/Figtree_500Medium.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Figtree_600SemiBold'; src: url('/fonts/Figtree_600SemiBold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Figtree_700Bold'; src: url('/fonts/Figtree_700Bold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Figtree_800ExtraBold'; src: url('/fonts/Figtree_800ExtraBold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'DMMono_400Regular'; src: url('/fonts/DMMono_400Regular.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'DMMono_500Medium'; src: url('/fonts/DMMono_500Medium.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Caveat_700Bold'; src: url('/fonts/Caveat_700Bold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Figtree_400Regular_Italic'; src: url('/fonts/Figtree_400Regular_Italic.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'PlusJakartaSans_400Regular'; src: url('/fonts/PlusJakartaSans_400Regular.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'PlusJakartaSans_500Medium'; src: url('/fonts/PlusJakartaSans_500Medium.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'PlusJakartaSans_600SemiBold'; src: url('/fonts/PlusJakartaSans_600SemiBold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'PlusJakartaSans_700Bold'; src: url('/fonts/PlusJakartaSans_700Bold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'PlusJakartaSans_800ExtraBold'; src: url('/fonts/PlusJakartaSans_800ExtraBold.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Caveat_400Regular'; src: url('/fonts/Caveat_400Regular.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Caveat_500Medium'; src: url('/fonts/Caveat_500Medium.woff2') format('woff2'); font-display: swap; }
+      @font-face { font-family: 'Caveat_600SemiBold'; src: url('/fonts/Caveat_600SemiBold.woff2') format('woff2'); font-display: swap; }
+    </style>
     <style id="expo-reset">
       /* These styles make the body full-height */
       html,
@@ -120,6 +157,12 @@
       // The URL the app was opened with (before sign-in redirects are cleaned out of it), and a
       // "Step inside" tap made while the app is still loading — the app acts on it once ready.
       window.__launchUrl = location.href;
+      // Offline cache: keeps the app on the phone so it opens instantly (see scripts/sw.js).
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
       (function () {
         var go = document.querySelector('#boot .go');
         if (!go) return;

@@ -69,7 +69,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "build": "expo export -p web"
+    "build": "expo export -p web && node scripts/stamp-sw.mjs"
   },
   "private": true
 }

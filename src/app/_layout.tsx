@@ -1,23 +1,3 @@
-import { BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
-import { Caveat_400Regular, Caveat_500Medium, Caveat_600SemiBold, Caveat_700Bold } from '@expo-google-fonts/caveat';
-import { DMMono_400Regular, DMMono_500Medium } from '@expo-google-fonts/dm-mono';
-import {
-  Figtree_400Regular,
-  Figtree_400Regular_Italic,
-  Figtree_500Medium,
-  Figtree_600SemiBold,
-  Figtree_700Bold,
-  Figtree_800ExtraBold,
-} from '@expo-google-fonts/figtree';
-import {
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-  PlusJakartaSans_800ExtraBold,
-} from '@expo-google-fonts/plus-jakarta-sans';
-import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
-import { loadAsync, useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, type ReactNode } from 'react';
@@ -29,6 +9,7 @@ import { uploadAvatar } from '@/state/profile';
 import { StoreProvider, useStore } from '@/state/store';
 import { C } from '@/theme/tokens';
 import { Boot, hideBoot } from '@/ui/Boot';
+import { useAppFonts } from '@/ui/fonts';
 import { WebShell } from '@/ui/primitives';
 import { CallOverlay } from '@/v2/components/calls/CallOverlay';
 import { AuthProvider, useAuth } from '@/v2/context/AuthContext';
@@ -40,35 +21,6 @@ import { NotificationsProvider } from '@/v2/context/NotificationsContext';
 import { ThrowAlertsOverlay, ThrowAlertsProvider } from '@/v2/context/ThrowAlertsContext';
 import { ThrowColorModeProvider } from '@/v2/context/ThrowColorModeContext';
 import { TriviaGameProvider } from '@/v2/context/TriviaGameContext';
-
-
-// Fonts the first screens need — the app waits for these.
-const FIRST_FONTS = {
-  BricolageGrotesque_700Bold,
-  BricolageGrotesque_800ExtraBold,
-  SpaceMono_400Regular,
-  SpaceMono_700Bold,
-  Figtree_400Regular,
-  Figtree_500Medium,
-  Figtree_600SemiBold,
-  Figtree_700Bold,
-  Figtree_800ExtraBold,
-  DMMono_400Regular,
-  DMMono_500Medium,
-  Caveat_700Bold,
-};
-// Only used deeper in (Games, Throw) — loaded in the background so they don't hold up launch.
-const LATER_FONTS = {
-  Figtree_400Regular_Italic,
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-  PlusJakartaSans_800ExtraBold,
-  Caveat_400Regular,
-  Caveat_500Medium,
-  Caveat_600SemiBold,
-};
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -152,13 +104,8 @@ function Routes() {
 }
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts(FIRST_FONTS);
-
-  useEffect(() => {
-    if (loaded || error) loadAsync(LATER_FONTS).catch(() => {});
-  }, [loaded, error]);
-
-  if (!loaded && !error) return <Boot />;
+  const fontsReady = useAppFonts();
+  if (!fontsReady) return <Boot />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: C.cobalt }}>
