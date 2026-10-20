@@ -1100,12 +1100,7 @@ export function ThrowHomeScreen({
                   onThrow={handleThrow}
                   onLaunched={handleLaunched}
                   throwLabel={isSelfSelected ? 'Swipe up to set alert' : lockedRecipient ? 'Swipe up to throw back' : 'Swipe up to throw'}
-                  onOpenInbox={() => {
-                    setStoryView(null);
-                    setStoryFlow(null);
-                    setIsNotificationsSelected(false);
-                    setIsReceivingSelected(true);
-                  }}
+                  // v3: no inbox button on the letter — received letters show on the Chats screen.
                   unreadCount={unreadCount}
                   onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
                   onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}

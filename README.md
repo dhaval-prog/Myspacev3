@@ -65,7 +65,7 @@ Launch speed:
 | `/throw`, `/letters` | Throw + received letters | v2 screens |
 | `/map` | Map (Mapbox) | Everyone sharing a location: friends + people who show themselves to everyone ("Add friend" on strangers). "Show me to" switch: Everyone / Friends / Hidden; accounts made in v3 default to Everyone |
 | `/games`, `/games/npat`, `/games/trivia` | Games hub; real multiplayer NPAT and Trivia | Leaderboard/points; v2 game screens |
-| `/pocket`, `/pocket/[id]`, `/pocket/manage` | Pocket cards, card detail, full wallet | Budget cards, spends; v2 wallet for new/join/members/history |
+| `/pocket` | Pocket (v2 screen: card deck, wallet, add/join, members, history, transfers) | Budget cards and spends; `?card=<id>` opens a card |
 | `/look` | Pick your look (change colour/photo any time) | `profiles.avatar_color` / `avatar_url` |
 | `/account` | Account settings | v2 screen |
 

@@ -12,7 +12,7 @@ export default function Throw() {
   const { openChat, goRequests, receivedRequests } = useFriends();
 
   const openTarget = (target: NotificationTarget) => {
-    if (target.screen === 'expenses') toTab({ pathname: '/pocket/[id]', params: { id: target.cardId } });
+    if (target.screen === 'expenses') toTab({ pathname: '/pocket', params: { card: target.cardId } });
     else if (target.screen === 'friends') {
       if (receivedRequests.some((r) => r.connectionId === target.connectionId)) goRequests();
       else openChat(target.connectionId);
@@ -31,9 +31,8 @@ export default function Throw() {
       onOpenGames={() => toTab('/games')}
       onOpenAddFriendScreen={() => router.push('/friends')}
       onNotificationTarget={openTarget}
-      onOpenReceivedLetters={(contactId, opts) =>
-        router.push({ pathname: '/letters', params: { ...(contactId ? { contact: contactId } : {}), ...(opts?.viaToast ? { toast: '1' } : {}) } })
-      }
+      // Received letters live on the Chats screen's "In the air" bar, not a separate screen.
+      onOpenReceivedLetters={() => toTab('/chat')}
       initialThrowId={throwId}
       initialFocusContactId={focus}
     />
