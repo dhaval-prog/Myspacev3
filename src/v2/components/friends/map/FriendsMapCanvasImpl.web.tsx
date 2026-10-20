@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import mapboxgl from 'mapbox-gl';
+import { MAPBOX_TOKEN } from '../../../lib/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { FriendsMapCanvasProps } from './friendsMapCanvasTypes';
 
-mapboxgl.accessToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
+mapboxgl.accessToken = MAPBOX_TOKEN;
 // A flat, muted street style (unlike ThrowMap's pitched "Standard" style) — this screen is a
 // straight-down 2D map, no 3D buildings/day-night config to drive.
 const MAPBOX_STYLE_URL = process.env.EXPO_PUBLIC_MAPBOX_FRIENDS_MAP_STYLE_URL ?? 'mapbox://styles/mapbox/light-v11';
