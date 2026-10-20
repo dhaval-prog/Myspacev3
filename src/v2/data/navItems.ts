@@ -1,0 +1,26 @@
+/**
+ * Bottom navigation destinations, data-driven per the MySpace reference.
+ * All three sit together in the nav pill, in this order; the "+" action
+ * is a separate floating button, not one of these items.
+ * `icon` is an SVG path drawn via the shared `Icon` component.
+ */
+export interface NavItem {
+  id: string;
+  icon: string;
+  label: string;
+}
+
+export const navItems: NavItem[] = [
+  // Chat is the app's landing point now (see App.tsx) — leads the pill accordingly.
+  // Same chat-bubble glyph as Throw's own Chats entry (FoldingLetter's CHAT_ICON) — reused here
+  // so this reads as the same destination. Deliberately the plain bubble, not ChatsListScreen's
+  // own bubble-plus FAB glyph (that one means "start a new chat", a different action).
+  { id: 'chat', icon: 'M20 11.5a7.5 7.5 0 0 1-10.7 6.8L4 19.5l1.3-4.9A7.5 7.5 0 1 1 20 11.5z', label: 'Chat' },
+  // Throw sits right beside Chat per explicit request (was the trailing slot before).
+  { id: 'throw', icon: 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z', label: 'Throw' },
+  // Opens the Friends Map screen — reachable from every screen's own nav dock, Chats' included.
+  { id: 'map', icon: 'M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z', label: 'Map' },
+  // Sits right beside Pocket per explicit request.
+  { id: 'games', icon: 'M7 8h10a4 4 0 0 1 4 4v1a3 3 0 0 1-5.4 1.8L14.5 13h-5l-1.1 1.8A3 3 0 0 1 3 13v-1a4 4 0 0 1 4-4z', label: 'Games' },
+  { id: 'expenses', icon: 'M5 4.5h14v15H5zM8 8.5h8M8 12h8M8 15.5h5', label: 'Pocket' },
+];

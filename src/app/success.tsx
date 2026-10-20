@@ -1,11 +1,16 @@
 // 07 Your pass — the pass drops on a lanyard, holo foil, tilt it to shine.
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { useMyProfile } from '@/state/profile';
 import { useStore } from '@/state/store';
+import { useAuth } from '@/v2/context/AuthContext';
+import { useFriends } from '@/v2/context/FriendsContext';
+import { useGameStats } from '@/v2/context/GameStatsContext';
+import { supabase } from '@/v2/lib/supabase';
 import { anim, E, skDrop, skFall, skSlide, skStamp, skSwing, skUp } from '@/theme/anim';
 import { C, F, hard } from '@/theme/tokens';
 import { AvatarFace } from '@/ui/AvatarFace';
@@ -22,8 +27,25 @@ const CONFETTI = Array.from({ length: 14 }, (_, i) => ({
   del: (i % 7) * 0.4,
 }));
 
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
 function Pass() {
-  const s = useStore();
+  const { user } = useAuth();
+  const { profile } = useMyProfile();
+  const { friends } = useFriends();
+  const { statsFor } = useGameStats();
+  const [letters, setLetters] = useState(0);
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('throws')
+      .select('id', { count: 'exact', head: true })
+      .eq('sender_id', user.id)
+      .then(({ count }) => setLetters(count ?? 0));
+  }, [user]);
+  const since = profile?.createdAt ? new Date(profile.createdAt) : new Date();
+  const games = user ? statsFor(user.id).gamesPlayed : 0;
+  const memberNo = '#' + (user?.id.replace(/[^0-9]/g, '').slice(0, 6).padEnd(6, '0') ?? '000000');
   const rx = useSharedValue(0);
   const ry = useSharedValue(0);
   const [size, setSize] = useState({ w: 290, h: 300 });
@@ -104,7 +126,7 @@ function Pass() {
               myspace pass
             </T>
             <T f={F.m7} s={11}>
-              #000214
+              {memberNo}
             </T>
           </View>
           <View style={{ paddingTop: 18, paddingHorizontal: 16, paddingBottom: 14, flexDirection: 'row', gap: 14, alignItems: 'center' }}>
@@ -118,17 +140,17 @@ function Pass() {
                 boxShadow: '0 0 0 2px #111, 0 8px 14px rgba(17,17,17,.25)',
                 transform: [{ rotate: '-6deg' }],
               }}>
-              <AvatarFace size={80} ring={4} font={30} />
+              <AvatarFace size={80} ring={4} font={30} name={profile?.name} color={profile?.avatarColor} photo={profile?.avatarUrl ?? null} />
             </View>
             <View style={{ flexShrink: 1 }}>
               <T f={F.d8} s={23} lh={25} ls={-0.8}>
-                {(s.name || 'Friend').trim()}
+                {profile?.name ?? ' '}
               </T>
               <T f={F.m4} s={12} style={{ marginTop: 4 }}>
-                @{s.handle}
+                {profile?.username ? '@' + profile.username : profile?.friendCode ? 'CODE ' + profile.friendCode : ''}
               </T>
               <T f={F.m4} s={10.5} c={C.ink60} style={{ marginTop: 3 }}>
-                MEMBER SINCE OCT 2026
+                MEMBER SINCE {MONTHS[since.getMonth()]} {since.getFullYear()}
               </T>
             </View>
           </View>
@@ -142,7 +164,7 @@ function Pass() {
               flexDirection: 'row',
               justifyContent: 'space-between',
             }}>
-            {['FRIENDS 0', 'LETTERS 0', 'GAMES 0'].map((x) => (
+            {[`FRIENDS ${friends.length}`, `LETTERS ${letters}`, `GAMES ${games}`].map((x) => (
               <T key={x} f={F.m7} s={11}>
                 {x}
               </T>
@@ -181,6 +203,11 @@ function Pass() {
 }
 
 export default function Success() {
+  const { afterAuth, set } = useStore();
+  // We've landed here after sign-up; next launch should go straight to Chats.
+  useEffect(() => {
+    if (afterAuth) set({ afterAuth: null });
+  }, [afterAuth, set]);
   const { top } = useStatusBar();
   const y = useY();
   return (

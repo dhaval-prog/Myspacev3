@@ -1,0 +1,316 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Circle } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Icon } from '../../components/Icon';
+import { BottomNav } from '../../components/BottomNav';
+import { FriendAvatar } from '../../components/friends/FriendAvatar';
+import { GameRow } from '../../components/gameshub/GameRow';
+import { GlassBackdrop } from '../../components/gameshub/GlassBackdrop';
+import { LeaderboardSheet } from '../../components/gameshub/LeaderboardSheet';
+import { PointsSheet } from '../../components/gameshub/PointsSheet';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useGameStats } from '../../context/GameStatsContext';
+import { ghColor, ghFont } from '../../theme/gamesHubTokens';
+
+const CHEV_ICON = 'M9 6l6 6-6 6';
+const PLUS_ICON = 'M12 5v14M5 12h14';
+const RING_SIZE = 88;
+const RING_HOLE = 68;
+const RING_THICKNESS = (RING_SIZE - RING_HOLE) / 2;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// react-native-svg's web typings omit `children` on Defs (a typing gap, not a runtime issue) — cast once.
+const DefsAny = Defs as unknown as React.ComponentType<{ children?: React.ReactNode }>;
+
+function badgeStyleFor(_rank: number) {
+  return { bg: ghColor.gradientB, fg: ghColor.textOnGradient };
+}
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+function ProgressRing({ pct, reduceMotion, children }: { pct: number; reduceMotion?: boolean; children: React.ReactNode }) {
+  const progress = useRef(new Animated.Value(reduceMotion ? pct : 0)).current;
+  const radius = (RING_SIZE - RING_THICKNESS) / 2;
+  const circumference = 2 * Math.PI * radius;
+  useEffect(() => {
+    if (reduceMotion) return;
+    Animated.timing(progress, { toValue: pct, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [pct, reduceMotion, progress]);
+  const dashOffset = progress.interpolate({ inputRange: [0, 1], outputRange: [circumference, 0] });
+  return (
+    <View style={styles.ringWrap}>
+      <Svg width={RING_SIZE} height={RING_SIZE}>
+        <DefsAny>
+          <SvgLinearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor={ghColor.gradientA} />
+            <Stop offset="100%" stopColor={ghColor.gradientB} />
+          </SvgLinearGradient>
+        </DefsAny>
+        <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={radius} stroke={ghColor.surface} strokeWidth={RING_THICKNESS} fill="none" />
+        <AnimatedCircle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={radius}
+          stroke="url(#ringGrad)"
+          strokeWidth={RING_THICKNESS}
+          fill="none"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="butt"
+          rotation="-90"
+          originX={RING_SIZE / 2}
+          originY={RING_SIZE / 2}
+        />
+      </Svg>
+      <View style={styles.ringCenter}>{children}</View>
+    </View>
+  );
+}
+
+interface GamesDashboardScreenProps {
+  onOpenExpenses: () => void;
+  onOpenThrow: () => void;
+  onOpenFriends: () => void;
+  onOpenMap: () => void;
+  onOpenNpat: (initialTab?: 'create' | 'join') => void;
+  onOpenTrivia: (initialTab?: 'create' | 'join') => void;
+}
+
+/**
+ * The Games hub — restyled to the "MySpace Games · 3A · A Tabletop" handoff.
+ * Real leaderboard/points data from GameStatsContext throughout; a game row
+ * expands in place into Create/Join instead of pushing a new screen.
+ */
+export function GamesDashboardScreen({ onOpenExpenses, onOpenThrow, onOpenFriends, onOpenMap, onOpenNpat, onOpenTrivia }: GamesDashboardScreenProps) {
+  const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
+  const { circle, leaderboard, myEntry, myRankDelta, breakdown, recentActivity, breakdownFor } = useGameStats();
+
+  const [leaderboardVisible, setLeaderboardVisible] = useState(false);
+  const [pointsVisible, setPointsVisible] = useState(false);
+  const [expandedRow, setExpandedRow] = useState<'npat' | 'trivia' | null>(null);
+
+  const myTotal = myEntry?.stats.totalPoints ?? 0;
+  const leader = leaderboard[0];
+  const topThree = leaderboard.slice(0, 3);
+  const leaderPoints = leader?.stats.totalPoints ?? 0;
+  const ringPct = leaderPoints > 0 ? Math.max(0.06, Math.min(1, myTotal / leaderPoints)) : myTotal > 0 ? 1 : 0.06;
+  const gapToFirst = myEntry && myEntry.rank > 1 ? leaderPoints - myTotal : 0;
+  const weeklyDelta = recentActivity.filter((tx) => Date.now() - new Date(tx.createdAt).getTime() <= WEEK_MS).reduce((sum, tx) => sum + tx.pointsChange, 0);
+  const npat = breakdown.find((b) => b.gameType === 'NPAT');
+  const trivia = breakdown.find((b) => b.gameType === 'TRIVIA');
+
+  return (
+    <LinearGradient colors={[ghColor.bgTop, ghColor.bgMid, ghColor.bgBottom]} locations={[0, 0.46, 1]} style={styles.screen}>
+      <GlassBackdrop />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 100 }]}>
+        <Text style={styles.title}>Games</Text>
+        <Text style={styles.subtitle}>Your gaming circle · {circle.length} seated</Text>
+
+        <View style={styles.leaderboardCard}>
+          <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+          <View style={styles.leaderboardCardTint} pointerEvents="none" />
+          <View style={styles.eyebrowRow}>
+            <Text style={styles.eyebrow}>LEADERBOARD · THIS WEEK</Text>
+            <Pressable onPress={() => setLeaderboardVisible(true)} style={styles.seeAll} accessibilityRole="button" accessibilityLabel="See all">
+              <Text style={styles.seeAllLabel}>See all</Text>
+              <Icon path={CHEV_ICON} color={ghColor.up} size={12} strokeWidth={2.4} />
+            </Pressable>
+          </View>
+
+          <View style={styles.topRow}>
+            {topThree.map((entry) => {
+              const badge = badgeStyleFor(entry.rank);
+              return (
+                <View key={entry.userId} style={styles.topItem}>
+                  <View style={styles.topAvatarWrap}>
+                    <FriendAvatar
+                      userId={entry.userId}
+                      name={entry.name}
+                      avatarUrl={entry.avatarUrl}
+                      size={56}
+                      radius={28}
+                      initialsFontFamily={ghFont.sans800}
+                      initialsFontSize={entry.isSelf ? 17 : 16}
+                      colorOverride={entry.isSelf ? { bg: ghColor.gradientB, fg: ghColor.textOnGradient } : { bg: ghColor.avatarFallbackBg, fg: ghColor.avatarMuted }}
+                    />
+                    <View style={[styles.rankBadge, { backgroundColor: badge.bg }]}>
+                      <Text style={[styles.rankBadgeLabel, { color: badge.fg }]}>{entry.rank}</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.topName, entry.isSelf && styles.topNameSelf]}>{entry.isSelf ? 'You' : entry.name}</Text>
+                  <Text style={[styles.topPoints, entry.isSelf && styles.topPointsSelf]}>{entry.stats.totalPoints}</Text>
+                </View>
+              );
+            })}
+            <Pressable onPress={onOpenFriends} style={styles.inviteItem} accessibilityRole="button" accessibilityLabel="Invite a friend">
+              <View style={styles.inviteCircle}>
+                <Icon path={PLUS_ICON} color={ghColor.textTertiary} size={20} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.inviteLabel}>INVITE</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <Pressable onPress={() => setPointsVisible(true)} style={styles.pointsCard} accessibilityRole="button" accessibilityLabel="Your points">
+          <BlurView intensity={45} tint="light" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" />
+          <View style={styles.pointsCardTint} pointerEvents="none" />
+          <ProgressRing pct={ringPct} reduceMotion={reduceMotion}>
+            <Text style={styles.ringValue}>{myTotal}</Text>
+            <Text style={styles.ringLabel}>POINTS</Text>
+          </ProgressRing>
+          <View style={styles.pointsMid}>
+            <View style={styles.rankRow}>
+              <Text style={styles.rankTitle}>Rank #{myEntry?.rank ?? '—'}</Text>
+              {myRankDelta !== null && myRankDelta !== 0 && (
+                <View style={styles.rankDeltaChip}>
+                  <Text style={styles.rankDeltaGlyph}>{myRankDelta > 0 ? '▲' : '▼'}</Text>
+                  <Text style={styles.rankDeltaLabel}>{Math.abs(myRankDelta)}</Text>
+                </View>
+              )}
+              <Text style={styles.gapLabel} numberOfLines={1}>
+                {myEntry && myEntry.rank > 1 ? `${gapToFirst} TO #1` : 'LEADING'}
+              </Text>
+            </View>
+            <BreakdownBar label="NPAT" value={npat?.net ?? 0} total={myTotal} color={ghColor.gradientA} />
+            <BreakdownBar label="TRIVIA" value={trivia?.net ?? 0} total={myTotal} color={ghColor.triviaBadgeBg} />
+          </View>
+        </Pressable>
+
+        <Text style={styles.playEyebrow}>PLAY A GAME</Text>
+
+        <GameRow
+          variant="npat"
+          title="Name, Place, Animal, Thing"
+          subtitle="5 rounds · 60s each"
+          expanded={expandedRow === 'npat'}
+          onToggle={() => setExpandedRow((r) => (r === 'npat' ? null : 'npat'))}
+          onCreate={() => onOpenNpat('create')}
+          onJoin={() => onOpenNpat('join')}
+        />
+        <GameRow
+          variant="trivia"
+          title="Trivia Night"
+          subtitle="Think fast. Answer faster."
+          expanded={expandedRow === 'trivia'}
+          onToggle={() => setExpandedRow((r) => (r === 'trivia' ? null : 'trivia'))}
+          onCreate={() => onOpenTrivia('create')}
+          onJoin={() => onOpenTrivia('join')}
+        />
+      </ScrollView>
+
+      <BottomNav
+        activeId="games"
+        onSelect={(id) => {
+          if (id === 'chat') onOpenFriends();
+          if (id === 'map') onOpenMap();
+          if (id === 'expenses') onOpenExpenses();
+          if (id === 'throw') onOpenThrow();
+        }}
+        bottomInset={insets.bottom}
+        reduceMotion={reduceMotion}
+      />
+
+      <LeaderboardSheet visible={leaderboardVisible} onClose={() => setLeaderboardVisible(false)} leaderboard={leaderboard} breakdownFor={breakdownFor} reduceMotion={reduceMotion} />
+      <PointsSheet
+        visible={pointsVisible}
+        onClose={() => setPointsVisible(false)}
+        myEntry={myEntry}
+        circleSize={circle.length}
+        breakdown={breakdown}
+        recentActivity={recentActivity}
+        weeklyDelta={weeklyDelta}
+        onSeeLeaderboard={() => {
+          setPointsVisible(false);
+          setLeaderboardVisible(true);
+        }}
+        reduceMotion={reduceMotion}
+      />
+    </LinearGradient>
+  );
+}
+
+function BreakdownBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.max(0, Math.min(100, (value / total) * 100)) : 0;
+  return (
+    <View style={styles.barRow}>
+      <Text style={styles.barLabel}>{label}</Text>
+      <View style={styles.barTrack}>
+        <View style={[styles.barFill, { width: `${pct}%`, backgroundColor: color }]} />
+      </View>
+      <Text style={styles.barValue}>{value}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  scroll: { paddingHorizontal: 20 },
+  title: { fontFamily: ghFont.sans800, fontSize: 30, lineHeight: 30, letterSpacing: -1.2, color: ghColor.textPrimary },
+  subtitle: { fontFamily: ghFont.sans400, fontSize: 12.5, color: ghColor.textSecondary, marginTop: 6 },
+  leaderboardCard: {
+    marginTop: 16,
+    borderRadius: 26,
+    padding: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: ghColor.glassBorder,
+    shadowColor: ghColor.gradientB,
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 14 },
+    shadowRadius: 32,
+  },
+  leaderboardCardTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.glassFill },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 9 },
+  eyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.textTertiary },
+  seeAll: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  seeAllLabel: { fontFamily: ghFont.sans600, fontSize: 11, color: ghColor.up },
+  topRow: { flexDirection: 'row', gap: 9 },
+  topItem: { flex: 1, alignItems: 'center', gap: 6 },
+  topAvatarWrap: { width: 56, height: 56 },
+  rankBadge: { position: 'absolute', left: -2, top: -3, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: ghColor.bgMid, alignItems: 'center', justifyContent: 'center' },
+  rankBadgeLabel: { fontFamily: ghFont.mono500, fontSize: 9 },
+  topName: { fontFamily: ghFont.sans600, fontSize: 10, color: ghColor.textPrimary, textAlign: 'center' },
+  topNameSelf: { fontFamily: ghFont.sans700 },
+  topPoints: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.06, color: ghColor.textSecondary, marginTop: -3 },
+  topPointsSelf: { fontFamily: ghFont.sans700, color: ghColor.textPrimary },
+  inviteItem: { flex: 1, alignItems: 'center', gap: 6 },
+  inviteCircle: { width: 56, height: 56, borderRadius: 28, borderWidth: 1.6, borderStyle: 'dashed', borderColor: ghColor.hairlineStrong, alignItems: 'center', justifyContent: 'center' },
+  inviteLabel: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.1, color: ghColor.textTertiary },
+  pointsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15,
+    marginTop: 16,
+    borderRadius: 26,
+    padding: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: ghColor.glassBorder,
+    shadowColor: ghColor.gradientB,
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 14 },
+    shadowRadius: 30,
+  },
+  pointsCardTint: { position: 'absolute', zIndex: -1, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: ghColor.glassFill },
+  ringWrap: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
+  ringCenter: { position: 'absolute', alignItems: 'center' },
+  ringValue: { fontFamily: ghFont.sans800, fontSize: 24, letterSpacing: -1.2, color: ghColor.textPrimary },
+  ringLabel: { fontFamily: ghFont.mono500, fontSize: 8, letterSpacing: 8 * 0.12, color: ghColor.textTertiary },
+  pointsMid: { flex: 1, gap: 8 },
+  rankRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  rankTitle: { fontFamily: ghFont.sans800, fontSize: 15, color: ghColor.textPrimary },
+  rankDeltaChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: ghColor.upBg, paddingVertical: 4, paddingHorizontal: 7, borderRadius: 999 },
+  rankDeltaGlyph: { fontSize: 8, color: ghColor.up },
+  rankDeltaLabel: { fontFamily: ghFont.mono500, fontSize: 9.5, color: ghColor.up },
+  gapLabel: { flex: 1, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.06, color: ghColor.textFaint },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  barLabel: { width: 46, fontFamily: ghFont.mono500, fontSize: 9, letterSpacing: 9 * 0.06, color: ghColor.textTertiary },
+  barTrack: { flex: 1, height: 8, borderRadius: 999, backgroundColor: ghColor.surface, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 999 },
+  barValue: { width: 30, textAlign: 'right', fontFamily: ghFont.mono500, fontSize: 10.5, color: ghColor.textPrimary },
+  playEyebrow: { fontFamily: ghFont.mono500, fontSize: 9.5, letterSpacing: 9.5 * 0.14, color: ghColor.textTertiary, marginTop: 18, marginBottom: 10 },
+});

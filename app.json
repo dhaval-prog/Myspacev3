@@ -9,7 +9,16 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.myspace.v3"
+      "bundleIdentifier": "app.myspace.v3",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "upi",
+          "tez",
+          "phonepe",
+          "paytmmp",
+          "bhim"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,11 +26,27 @@
         "foregroundImage": "./assets/images/splash-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "app.myspace.v3"
+      "package": "app.myspace.v3",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyB-swu0jHgJ2kYC4phZr76aBM-gPUwvB8k"
+        }
+      },
+      "manifestQueries": {
+        "intent": [
+          {
+            "action": "android.intent.action.VIEW",
+            "data": {
+              "scheme": "upi"
+            }
+          }
+        ]
+      }
     },
     "web": {
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "themeColor": "#2B4BFF"
     },
     "plugins": [
       "expo-router",
@@ -33,13 +58,39 @@
           "imageWidth": 160
         }
       ],
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MySpace uses your camera to scan a card's join QR code and for video calls."
+        }
+      ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Myspace uses your photos so you can put one on your sticker."
+          "photosPermission": "MySpace uses your photos to read QR codes and share photos in chat."
         }
       ],
-      "expo-font"
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "MySpace uses your location to share it in a chat message, and to show you and your friends on the Live Locations map."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "MySpace uses your microphone to turn your spoken words into a Throw letter.",
+          "speechRecognitionPermission": "MySpace uses speech recognition to turn your spoken words into a Throw letter."
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "MySpace uses your camera to scan a card's join QR code and for video calls.",
+          "microphonePermission": "MySpace uses your microphone for video calls."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

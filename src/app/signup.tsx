@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Platform, TextInput, View, type ViewStyle } from 
 import Svg, { Path } from 'react-native-svg';
 
 import { useStore } from '@/state/store';
+import { useAuth } from '@/v2/context/AuthContext';
 import { anim, E, loop, skNudge, skPop, skPopR, skShake, skStep } from '@/theme/anim';
 import { C, F } from '@/theme/tokens';
 import { Fill } from '@/ui/kit';
@@ -43,6 +44,8 @@ function GoogleG() {
 
 export default function Signup() {
   const s = useStore();
+  const { signInWithOAuth } = useAuth();
+  const [oauthErr, setOauthErr] = useState<string | null>(null);
   const { top } = useStatusBar();
   const [st, setSt] = useState(0);
   const [k, setK] = useState(0); // step-change counter (restarts the slide-in)
@@ -215,6 +218,11 @@ export default function Signup() {
           <T s={13.5} lh={19} f={F.b5} c={err && !ok ? '#C8391F' : 'rgba(22,33,12,.55)'} style={{ marginTop: 12 }}>
             {err && !ok ? q[4] : q[3]}
           </T>
+          {oauthErr ? (
+            <T s={13} c="#C8391F" style={{ marginTop: 6 }}>
+              {oauthErr}
+            </T>
+          ) : null}
         </A>
 
         <View style={{ flex: 1 }} />
@@ -250,7 +258,19 @@ export default function Signup() {
         </View>
         <View style={{ marginTop: 12, flexDirection: 'row', gap: 10 }}>
           {[
-            ['Use Google', () => router.push('/avatar'), true],
+            [
+              'Use Google',
+              () => {
+                s.set({ afterAuth: '/success' });
+                signInWithOAuth('google').then(({ error }) => {
+                  if (error) {
+                    setOauthErr(error);
+                    s.set({ afterAuth: null });
+                  }
+                });
+              },
+              true,
+            ],
             ['I have an account', () => router.push('/login'), false],
           ].map(([label, fn, g]) => (
             <Press

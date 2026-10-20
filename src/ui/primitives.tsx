@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import {
   Platform,
   Pressable,
@@ -145,19 +145,20 @@ export function Plane({
 }
 
 // ---------------------------------------------------------------------------
-// Device frame / status-bar height.
-// The design is drawn on a 390×844 iPhone artboard with a 47px status bar.
-// On device we use the real safe-area inset; on web we draw the phone frame.
-
-const FrameCtx = createContext<{ top: number; bottom: number } | null>(null);
+// Layout shell / status-bar height.
+// The design is drawn on a 390×844 iPhone artboard with a 47px status bar. On device we use the
+// real safe-area inset. On web there's no OS status bar, so content starts a little below the top,
+// and the app is shown full-screen on phones and as a centred mobile-width column on desktop.
 
 export const IS_WEB = Platform.OS === 'web';
+const WEB_TOP = 14;
+/** Widest the app gets on web before it's centred as a mobile column. */
+export const WEB_MAX_WIDTH = 480;
 
-/** Status-bar height: real inset on device, 47 inside the web phone frame. */
+/** Status-bar height: real inset on device, a small top margin on web. */
 export function useStatusBar() {
-  const frame = useContext(FrameCtx);
   const insets = useSafeAreaInsets();
-  if (frame) return frame;
+  if (IS_WEB) return { top: Math.max(insets.top, WEB_TOP), bottom: insets.bottom };
   return { top: Math.max(insets.top, 20), bottom: insets.bottom };
 }
 
@@ -167,59 +168,12 @@ export function useY() {
   return (y: number) => y - 47 + top;
 }
 
-export function WebFrame({ children }: { children: ReactNode }) {
+/** Web: full-bleed on phones, a centred mobile-width column on wider screens. Native: passthrough. */
+export function WebShell({ children }: { children: ReactNode }) {
   if (!IS_WEB) return <>{children}</>;
   return (
-    <View
-      style={
-        {
-          flex: 1,
-          minHeight: '100%',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: C.paper,
-          padding: 24,
-          ...{ backgroundImage: 'radial-gradient(circle, rgba(17,17,17,.08) 1px, transparent 1px)', backgroundSize: '18px 18px' },
-        } as ViewStyle
-      }>
-      <View style={{ padding: 10, borderRadius: 60, backgroundColor: '#111', boxShadow: '12px 12px 0px 0px #2B4BFF' }}>
-        <View style={{ width: 390, height: 844, borderRadius: 50, overflow: 'hidden', backgroundColor: C.paper }}>
-          <FrameCtx.Provider value={{ top: 47, bottom: 0 }}>{children}</FrameCtx.Provider>
-          <View
-            pointerEvents="none"
-            style={{ position: 'absolute', top: 11, left: 135, width: 120, height: 34, borderRadius: 20, backgroundColor: '#000', zIndex: 99 }}
-          />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-/** Fake "9:41" status bar, drawn only in the web frame. */
-export function StatusBarArt({ color = C.ink }: { color?: string }) {
-  const frame = useContext(FrameCtx);
-  if (!frame) return null;
-  return (
-    <View
-      pointerEvents="none"
-      style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        top: 0,
-        height: 47,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 32,
-        zIndex: 60,
-      }}>
-      <T f={F.b7} s={15} c={color}>
-        9:41
-      </T>
-      <T f={F.m4} s={11} c={color}>
-        ●●● ▮
-      </T>
+    <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#111' }}>
+      <View style={{ flex: 1, width: '100%', maxWidth: WEB_MAX_WIDTH, overflow: 'hidden', backgroundColor: C.paper }}>{children}</View>
     </View>
   );
 }

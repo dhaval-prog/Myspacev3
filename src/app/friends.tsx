@@ -1,52 +1,26 @@
-// 08 Add friends — invite QR + code, type their six characters, Add → ADDED stamp.
+// 08 Add friends — your real invite code + QR, type a friend's six characters, Add → request sent.
 import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View, type ViewStyle } from 'react-native';
-import Svg, { Rect } from 'react-native-svg';
+import QRCode from 'react-native-qrcode-svg';
 
-import { initialsOf, PEOPLE, useStore } from '@/state/store';
+import { useMyProfile } from '@/state/profile';
+import { initialsOf } from '@/state/store';
 import { anim, E, loop, skBlink, skFlip, skPop, skScanQ, skStamp, skUp, skWobble } from '@/theme/anim';
 import { C, F } from '@/theme/tokens';
 import { A, Icon, ICON, Press, T, useStatusBar } from '@/ui/primitives';
 import { Screen } from '@/ui/Screen';
+import { useFriends } from '@/v2/context/FriendsContext';
+import type { FriendProfile } from '@/v2/types/friends';
 
 const I = C.deep;
-
-// Deterministic 21×21 mock QR (three finder squares + seeded noise).
-const QR21: boolean[] = (() => {
-  const n = 21;
-  const out: boolean[] = [];
-  let s = 7;
-  const rnd = () => {
-    s = (s * 9301 + 49297) % 233280;
-    return s / 233280;
-  };
-  const fd = (x: number, y: number, ox: number, oy: number) => {
-    const dx = x - ox;
-    const dy = y - oy;
-    if (dx < 0 || dy < 0 || dx > 6 || dy > 6) return null;
-    return dx === 0 || dy === 0 || dx === 6 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4);
-  };
-  for (let y = 0; y < n; y++)
-    for (let x = 0; x < n; x++) {
-      let v = fd(x, y, 0, 0);
-      if (v === null) v = fd(x, y, 14, 0);
-      if (v === null) v = fd(x, y, 0, 14);
-      if (v === null) {
-        const inF = (x < 8 && y < 8) || (x > 12 && y < 8) || (x < 8 && y > 12);
-        v = inF ? false : rnd() > 0.52;
-      }
-      out.push(v);
-    }
-  return out;
-})();
-
 const RING = [C.lime, C.ice, C.coral];
 
-function QrCard({ copied, onCopy }: { copied: boolean; onCopy: () => void }) {
-  const cell = 140 / 21;
+const prettyCode = (c: string | null) => (c ? `${c.slice(0, 3)} · ${c.slice(3)}` : '··· · ···');
+
+function QrCard({ code, copied, onCopy }: { code: string | null; copied: boolean; onCopy: () => void }) {
   return (
     <A
       style={[
@@ -66,12 +40,8 @@ function QrCard({ copied, onCopy }: { copied: boolean; onCopy: () => void }) {
         anim(skFlip(), 0.7, 0.2, E.out),
       ]}>
       <View style={{ width: 164, height: 164, padding: 12, backgroundColor: '#fff', borderRadius: 22 }}>
-        <View style={{ width: 140, height: 140, overflow: 'hidden' }}>
-          <Svg width={140} height={140}>
-            {QR21.map((on, i) =>
-              on ? <Rect key={i} x={(i % 21) * cell} y={Math.floor(i / 21) * cell} width={cell + 0.3} height={cell + 0.3} fill="#111" /> : null,
-            )}
-          </Svg>
+        <View style={{ width: 140, height: 140, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+          {code ? <QRCode value={`myspace://add/${code}`} size={140} color="#111" backgroundColor="#fff" ecl="H" /> : null}
           <A
             pointerEvents="none"
             style={[
@@ -109,11 +79,11 @@ function QrCard({ copied, onCopy }: { copied: boolean; onCopy: () => void }) {
       </T>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <T f={F.dm5} s={26} ls={4.3} c={C.lime}>
-          K7M · 2QX
+          {prettyCode(code)}
         </T>
         <Press
           onPress={onCopy}
-          accessibilityLabel="Copy invite link"
+          accessibilityLabel="Copy invite code"
           pressed={{ transform: [{ scale: 0.92 }] }}
           style={{ height: 34, minWidth: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,.12)', paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }}>
           {copied ? (
@@ -131,26 +101,61 @@ function QrCard({ copied, onCopy }: { copied: boolean; onCopy: () => void }) {
   );
 }
 
+type Found = { profile: FriendProfile; mutuals: number | null };
+
 export default function Friends() {
-  const s = useStore();
   const { top } = useStatusBar();
-  const [code, setCode] = useState('R4TQ2P');
+  const { profile } = useMyProfile();
+  const { friendCode, friends, lookupCode, sendRequest, relationshipWith, matchFound, mutualFriendCount, goScan, goChats } = useFriends();
+  const code6 = friendCode ?? profile?.friendCode ?? null;
+
+  const [code, setCode] = useState('');
   const [copied, setCopied] = useState(false);
+  const [lookupErr, setLookupErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState<Record<string, boolean>>({});
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const ct = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (ct.current && clearTimeout(ct.current)), []);
 
+  // Look the code up as soon as all six characters are in.
+  const onCode = (v: string) => {
+    const next = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    setCode(next);
+    setLookupErr(null);
+    if (next.length === 6 && next !== code) {
+      lookupCode(next, { navigate: false }).then(({ error }) => {
+        if (error) setLookupErr(error);
+      });
+    }
+  };
+  const found: Found | null = code.length === 6 && matchFound && !lookupErr ? { profile: matchFound, mutuals: mutualFriendCount } : null;
+
   const copy = () => {
-    Clipboard.setStringAsync('https://myspace.app/@' + s.handle).catch(() => {});
+    if (!code6) return;
+    Clipboard.setStringAsync(code6).catch(() => {});
     setCopied(true);
     if (ct.current) clearTimeout(ct.current);
     ct.current = setTimeout(() => setCopied(false), 1600);
   };
 
-  const mi = code.length === 6 ? (code === 'R4TQ2P' ? 0 : [...code].reduce((a, c) => a + c.charCodeAt(0), 0) % 5) : -1;
-  const mu = mi >= 0 ? PEOPLE[mi] : null;
-  const count = Object.values(s.fadd).filter(Boolean).length;
-  const added = mi >= 0 && !!s.fadd[mi];
+  const rel = found ? (sent[found.profile.userId] ? 'already_pending' : relationshipWith(found.profile.userId)) : 'none';
+  const add = async () => {
+    if (!found || busy) return;
+    setBusy(true);
+    const { error } = await sendRequest('');
+    setBusy(false);
+    if (error) setLookupErr(error);
+    else setSent((x) => ({ ...x, [found.profile.userId]: true }));
+  };
+  const why =
+    rel === 'self'
+      ? 'that’s your own code'
+      : rel === 'already_friends'
+        ? 'already friends'
+        : found?.mutuals
+          ? `${found.mutuals} mutual`
+          : 'on Myspace';
 
   return (
     <Screen bar={I} style={{ backgroundColor: '#C6E9A8' }}>
@@ -198,7 +203,7 @@ export default function Friends() {
             </T>
           </A>
 
-          <QrCard copied={copied} onCopy={copy} />
+          <QrCard code={code6} copied={copied} onCopy={copy} />
 
           <A style={[{ marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 14 }, anim(skUp(), 0.4, 0.45)]}>
             <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(22,33,12,.1)' }} />
@@ -242,7 +247,7 @@ export default function Friends() {
             <TextInput
               ref={input}
               value={code}
-              onChangeText={(v) => setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+              onChangeText={onCode}
               maxLength={6}
               autoCapitalize="characters"
               autoCorrect={false}
@@ -252,9 +257,9 @@ export default function Friends() {
             />
           </Press>
 
-          {mu ? (
+          {found ? (
             <A
-              key={'m' + mi}
+              key={'m' + found.profile.userId}
               style={[
                 {
                   marginTop: 12,
@@ -272,36 +277,29 @@ export default function Friends() {
                 } as ViewStyle,
                 anim(skUp(), 0.35, 0, E.out),
               ]}>
-              <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: RING[mi % 3], alignItems: 'center', justifyContent: 'center' }}>
-                <T f={F.b7} s={15} c={I}>
-                  {initialsOf(mu[0])}
-                </T>
+              <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: RING[found.profile.name.length % 3], overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+                {found.profile.avatarUrl ? (
+                  <Image source={{ uri: found.profile.avatarUrl }} style={{ width: 46, height: 46 }} contentFit="cover" />
+                ) : (
+                  <T f={F.b7} s={15} c={I}>
+                    {initialsOf(found.profile.name)}
+                  </T>
+                )}
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <T f={F.b6} s={15.5} c={I}>
-                  {mu[0]}
+                <T f={F.b6} s={15.5} c={I} lines={1}>
+                  {found.profile.name}
                 </T>
-                <T s={12.5} c={C.deep55}>
-                  @{mu[1]} · {mu[4]}
+                <T s={12.5} c={C.deep55} lines={1}>
+                  {found.profile.username ? `@${found.profile.username} · ` : ''}
+                  {why}
                 </T>
               </View>
-              {added ? (
-                <Press onPress={() => s.toggleFriend(mi)} accessibilityLabel={`Remove ${mu[0]}`}>
-                  <A
-                    style={[
-                      { borderRadius: 8, borderWidth: 2, borderColor: I, backgroundColor: C.lime, paddingVertical: 4, paddingHorizontal: 9 },
-                      anim(skStamp(-8), 0.45, 0, E.out),
-                    ]}>
-                    <T f={F.dm5} s={11.5} ls={1} c={I}>
-                      ADDED ✓
-                    </T>
-                  </A>
-                </Press>
-              ) : (
+              {rel === 'none' ? (
                 <Press
-                  onPress={() => s.toggleFriend(mi)}
+                  onPress={add}
                   accessibilityRole="button"
-                  accessibilityLabel={`Add ${mu[0]}`}
+                  accessibilityLabel={`Add ${found.profile.name}`}
                   pressed={{ transform: [{ translateX: 2 }, { translateY: 2 }], boxShadow: `0 0 0 ${I}` } as ViewStyle}
                   style={{
                     borderRadius: 999,
@@ -311,17 +309,28 @@ export default function Friends() {
                     boxShadow: `2px 2px 0 ${I}`,
                     paddingVertical: 8,
                     paddingHorizontal: 16,
+                    opacity: busy ? 0.6 : 1,
                   }}>
                   <T f={F.b7} s={14} c={I}>
-                    Add
+                    {busy ? '…' : 'Add'}
                   </T>
                 </Press>
-              )}
+              ) : rel !== 'self' ? (
+                <A
+                  style={[
+                    { borderRadius: 8, borderWidth: 2, borderColor: I, backgroundColor: C.lime, paddingVertical: 4, paddingHorizontal: 9 },
+                    anim(skStamp(-8), 0.45, 0, E.out),
+                  ]}>
+                  <T f={F.dm5} s={11.5} ls={1} c={I}>
+                    {rel === 'already_friends' ? 'FRIENDS ✓' : 'REQUESTED ✓'}
+                  </T>
+                </A>
+              ) : null}
             </A>
           ) : (
             <View style={{ marginTop: 12, borderRadius: 24, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(22,33,12,.25)', padding: 15 }}>
-              <T s={13} c={C.deep55} center>
-                {code.length ? `${6 - code.length} more to go…` : 'Type the six characters your friend sent you.'}
+              <T s={13} c={lookupErr ? '#C8391F' : C.deep55} center>
+                {lookupErr ?? (code.length === 6 ? 'Looking them up…' : code.length ? `${6 - code.length} more to go…` : 'Type the six characters your friend sent you.')}
               </T>
             </View>
           )}
@@ -329,6 +338,10 @@ export default function Friends() {
           <View style={{ flex: 1, minHeight: 20 }} />
           <A style={anim(skUp(), 0.5, 0.7)}>
             <Press
+              onPress={() => {
+                goScan();
+                router.push('/thread');
+              }}
               accessibilityRole="button"
               pressed={{ transform: [{ translateX: 3 }, { translateY: 3 }], boxShadow: `0 0 0 ${I}` } as ViewStyle}
               style={{
@@ -349,9 +362,16 @@ export default function Friends() {
               </T>
             </Press>
           </A>
-          <Press onPress={() => router.replace('/chat')} accessibilityRole="button" pressed={{ opacity: 0.7 }} style={{ marginTop: 10, paddingVertical: 8 }}>
+          <Press
+            onPress={() => {
+              goChats();
+              router.replace('/chat');
+            }}
+            accessibilityRole="button"
+            pressed={{ opacity: 0.7 }}
+            style={{ marginTop: 10, paddingVertical: 8 }}>
             <T f={F.b6} s={14.5} c={I} center>
-              {count ? 'Go to my space' : 'Skip for now'} →
+              {friends.length || Object.keys(sent).length ? 'Go to my space' : 'Skip for now'} →
             </T>
           </Press>
         </ScrollView>

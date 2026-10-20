@@ -5,6 +5,7 @@ import { View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 
 import { firstOf, useStore } from '@/state/store';
+import { supabase } from '@/v2/lib/supabase';
 import { anim, E, skFlap, skFloat, skLetter } from '@/theme/anim';
 import { C, F, hard } from '@/theme/tokens';
 import { DrawPath, Stripes } from '@/ui/kit';
@@ -29,6 +30,7 @@ export default function Verify() {
   const { top } = useStatusBar();
   // The flap swings over the letter for the first half of its turn, then tucks behind it.
   const [flapBehind, setFlapBehind] = useState(false);
+  const [resent, setResent] = useState<string | null>(null);
   useEffect(() => {
     const t = setTimeout(() => setFlapBehind(true), 700);
     return () => clearTimeout(t);
@@ -214,21 +216,35 @@ export default function Verify() {
       </View>
       <View style={{ flex: 1 }} />
       <Press
-        onPress={() => router.replace('/success')}
+        onPress={() => {
+          // After tapping the link in the email, log in with the details just entered.
+          s.set({ lpw: s.pw });
+          router.replace('/login');
+        }}
         accessibilityRole="button"
         pressed={pushed(4, 1)}
         style={{ alignSelf: 'stretch', borderRadius: 20, backgroundColor: '#fff', borderWidth: 2, borderColor: C.ink, paddingVertical: 18, alignItems: 'center', ...hard(5) }}>
         <T f={F.d8} s={20}>
-          Open my inbox
+          I’ve confirmed · Log in
         </T>
       </Press>
       <View style={{ marginTop: 14, flexDirection: 'row' }}>
         <T f={F.b7} s={14}>
-          Nothing yet?{' '}
+          {resent ?? 'Nothing yet? '}
         </T>
-        <T f={F.b7} s={14} style={{ textDecorationLine: 'underline' }}>
-          Send again
-        </T>
+        {resent ? null : (
+          <Press
+            accessibilityRole="button"
+            onPress={() =>
+              supabase.auth
+                .resend({ type: 'signup', email: s.email.trim() })
+                .then(({ error }) => setResent(error ? error.message : 'Sent again — check your mail.'))
+            }>
+            <T f={F.b7} s={14} style={{ textDecorationLine: 'underline' }}>
+              Send again
+            </T>
+          </Press>
+        )}
       </View>
     </Screen>
   );
