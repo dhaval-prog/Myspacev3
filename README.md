@@ -43,7 +43,12 @@ Map visibility: `throw_profiles.location_visibility` defaults to `all` (everyone
 
 On phones the web app fills the screen; on desktop it shows as a centred mobile-width column.
 
-Launch speed: `public/index.html` shows the splash as a still image (`public/launch-hero.webp`) before any JavaScript runs, and `hideBoot()` lifts it once the app is ready. Mapbox GL and three.js load on demand (Map/Throw), and only the fonts the first screens need block launch. If you change the splash layout, re-capture `launch-hero.webp` so the two still match.
+Launch speed:
+- **Caching** — `vercel.json` marks the hashed app code (`/_expo/static`, `/assets`) as cache-forever, so phones keep it between opens.
+- **Offline** — a service worker (`scripts/sw.js`, written to `dist/sw.js` with the build id and first-screen files by `scripts/stamp-sw.mjs` during `npm run build`) keeps code, fonts and launch images on the phone; pages are network-first with a 3 s fallback to the saved copy, so new deploys show up on the next open and the app still opens offline.
+- **Fonts (web)** — Latin-subset WOFF2 files in `public/fonts/` (`scripts/build-web-fonts.py`), declared and preloaded in `public/index.html`; the app waits at most 2.5 s for the first screen's fonts (`src/ui/fonts.web.ts`). Native still bundles the TTFs (`src/ui/fonts.ts`).
+
+`public/index.html` shows the splash as a still image (`public/launch-hero.webp`) before any JavaScript runs, and `hideBoot()` lifts it once the app is ready. Mapbox GL and three.js load on demand (Map/Throw), and only the fonts the first screens need block launch. If you change the splash layout, re-capture `launch-hero.webp` so the two still match.
 
 ## Screens
 
