@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import mapboxgl from 'mapbox-gl';
+import { MAPBOX_TOKEN } from '../../lib/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { throwColor } from '../../theme/throwTokens';
 import { useThrowColorMode } from '../../context/ThrowColorModeContext';
@@ -10,7 +11,7 @@ import { PaperPlane } from './PaperPlane';
 import type { ThrowMapProps } from './throwMapTypes';
 import type { LatLng } from '../../utils/geo';
 
-mapboxgl.accessToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
+mapboxgl.accessToken = MAPBOX_TOKEN;
 // A custom Mapbox Studio style ("Faded"), built on Mapbox Standard rather than from scratch — real
 // 3D buildings/landmarks and day/night are both handled by the style itself (its Standard "basemap"
 // import has `show3dFacades`/`showLandmarkIcons` on and a `lightPreset` config we drive directly,

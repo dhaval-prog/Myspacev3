@@ -21,6 +21,7 @@ import { FriendsMapPinAnchor } from '@/v2/components/friends/map/FriendsMapPinAn
 import { useAuth } from '@/v2/context/AuthContext';
 import { useFriends } from '@/v2/context/FriendsContext';
 import { ThrowProvider, useThrow } from '@/v2/context/ThrowContext';
+import { MAPBOX_TOKEN } from '@/v2/lib/mapbox';
 import { supabase } from '@/v2/lib/supabase';
 import type { LocationVisibility } from '@/v2/types/throw';
 import {
@@ -40,7 +41,7 @@ import {
 import { timeAgo } from '@/v2/utils/relativeTime';
 
 /** Real map everywhere except web builds without a Mapbox token (those keep the sticker map). */
-const REAL_MAP = Platform.OS !== 'web' || !!process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+const REAL_MAP = Platform.OS !== 'web' || !!MAPBOX_TOKEN;
 /** Accounts created from v3 onwards show on the map to everyone by default (they can switch it off). */
 const V3_LAUNCH = Date.parse('2026-10-20T00:00:00Z');
 const DEFAULT_CAMERA = { zoom: 4, center: { latitude: 21.5, longitude: 79.5 } };

@@ -19,7 +19,7 @@ Checks: `npx tsc --noEmit` and `npx eslint src`.
 | Variable | Needed for |
 | --- | --- |
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Pointing at a different Supabase project |
-| `EXPO_PUBLIC_MAPBOX_TOKEN`, `EXPO_PUBLIC_MAPBOX_STYLE_URL`, `EXPO_PUBLIC_MAPBOX_FRIENDS_MAP_STYLE_URL` | The real map on Map and Throw **on web** (native uses Apple/Google Maps). Without a token, web Map falls back to the sticker map. |
+| `EXPO_PUBLIC_MAPBOX_TOKEN`, `EXPO_PUBLIC_MAPBOX_STYLE_URL`, `EXPO_PUBLIC_MAPBOX_FRIENDS_MAP_STYLE_URL` | The real map on Map and Throw **on web** (native uses Apple/Google Maps). Defaults to the same public token as v2 (`src/v2/lib/mapbox.ts`). |
 
 ### Google sign-in setup (one-time, Supabase dashboard)
 
