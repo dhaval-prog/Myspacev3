@@ -70,6 +70,10 @@
         align-items: center;
         justify-content: center;
       }
+      #boot .go.down {
+        transform: translate(4px, 4px);
+        box-shadow: 1px 1px 0 #111;
+      }
       #boot .go img {
         width: 148px;
         height: 35px;
@@ -112,6 +116,19 @@
         <div class="go"><img src="/launch-step-inside.webp" alt="" /></div>
       </div>
     </div>
+    <script>
+      // The URL the app was opened with (before sign-in redirects are cleaned out of it), and a
+      // "Step inside" tap made while the app is still loading — the app acts on it once ready.
+      window.__launchUrl = location.href;
+      (function () {
+        var go = document.querySelector('#boot .go');
+        if (!go) return;
+        go.addEventListener('click', function () {
+          window.__bootGo = true;
+          go.classList.add('down');
+        });
+      })();
+    </script>
 
     <!-- iOS Safari's keyboard-avoidance shifts the whole page up while a text input is focused
          (there's nothing to opt out of — it's not `body`'s own scroll, which `overflow: hidden`

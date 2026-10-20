@@ -51,7 +51,7 @@ export function ThrowColorModeProvider({ children }: { children: React.ReactNode
   const userId = user?.id;
   const [mode, setModeState] = useState<ThrowColorMode>('auto');
   const [mapMode, setMapModeState] = useState<ThrowColorMode>('auto');
-  const [showMapBackground, setShowMapBackgroundState] = useState(false);
+  const [showMapBackground, setShowMapBackgroundState] = useState(true);
   const [autoIsDay, setAutoIsDay] = useState(() => isDaytimeNow());
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export function ThrowColorModeProvider({ children }: { children: React.ReactNode
     if (!userId) {
       setModeState('auto');
       setMapModeState('auto');
-      setShowMapBackgroundState(false);
+      setShowMapBackgroundState(true);
       return;
     }
     let cancelled = false;
@@ -78,7 +78,8 @@ export function ThrowColorModeProvider({ children }: { children: React.ReactNode
       if (cancelled) return;
       setModeState((data?.throw_color_mode as ThrowColorMode | undefined) ?? 'auto');
       setMapModeState((data?.throw_map_color_mode as ThrowColorMode | undefined) ?? 'auto');
-      setShowMapBackgroundState((data?.throw_map_show_background as boolean | undefined) ?? false);
+      // On unless the person turned it off in Throw settings.
+      setShowMapBackgroundState((data?.throw_map_show_background as boolean | undefined) ?? true);
     })();
     return () => {
       cancelled = true;

@@ -1,6 +1,8 @@
 // Trivia — Myspace v2's real multiplayer trivia (lobby, live questions, scoring).
 import { router, useLocalSearchParams } from 'expo-router';
 
+import { backToTab } from '@/ui/nav';
+
 import { TriviaGameScreen } from '@/v2/screens/games/trivia/TriviaGameScreen';
 
 export default function Trivia() {
@@ -8,11 +10,11 @@ export default function Trivia() {
   return (
     <TriviaGameScreen
       initialTab={tab}
-      onHome={() => (router.canGoBack() ? router.back() : router.replace('/games'))}
-      onOpenExpenses={() => router.replace('/pocket')}
-      onOpenThrow={() => router.replace('/throw')}
-      onOpenChats={() => router.replace('/chat')}
-      onOpenMap={() => router.replace('/map')}
+      onHome={() => (router.canGoBack() ? router.back() : backToTab('/games'))}
+      onOpenExpenses={() => backToTab('/pocket')}
+      onOpenThrow={() => backToTab('/throw')}
+      onOpenChats={() => backToTab('/chat')}
+      onOpenMap={() => backToTab('/map')}
     />
   );
 }

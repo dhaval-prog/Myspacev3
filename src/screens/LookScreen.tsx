@@ -3,6 +3,8 @@
 // mode 'edit': change your colour/photo any time after sign-up (saved to your profile).
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
+
+import { backToTab } from '@/ui/nav';
 import { useState } from 'react';
 import { View, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -66,7 +68,7 @@ export function LookScreen({ mode }: { mode: 'signup' | 'edit' }) {
     if (err) return setError(err.message);
     setOwnColor(user.id, cur.av);
     setSaved(true);
-    setTimeout(() => (router.canGoBack() ? router.back() : router.replace('/chat')), 450);
+    setTimeout(() => (router.canGoBack() ? router.back() : backToTab('/chat')), 450);
   };
 
   const submit = async () => {
