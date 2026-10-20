@@ -246,6 +246,9 @@ export interface FoldingLetterHandle {
 /** One bottom-controls icon's own chrome — the usual light glass circle, or (isNight) a plain
  * solid dark circle instead, matching the night reference screenshot. Kept as one component
  * rather than an if/else at each of the five call sites below. */
+/** Outline/shadow/icon ink of the letter's sticker buttons — same deep ink as the Chats screen. */
+const STICKER_INK = '#16210C';
+
 function BottomIconSurface({
   isNight,
   tintColor,
@@ -269,8 +272,9 @@ function BottomIconSurface({
   // v3 "sticker" look, same as the Chats screen's buttons: solid fill, ink outline, hard offset shadow.
   void tintColor;
   if (active) return <View style={[style, styles.iconSurface, styles.iconSurfaceActive]}>{children}</View>;
-  if (primary) return <View style={[style, styles.iconSurface, styles.iconSurfacePrimary]}>{children}</View>;
-  if (isNight) return <View style={[style, styles.iconSurface, styles.iconSurfaceNight]}>{children}</View>;
+  // Same look day and night (white circle, ink outline, hard ink shadow) — reads clearly on both papers.
+  void isNight;
+  void primary;
   return <View style={[style, styles.iconSurface]}>{children}</View>;
 }
 export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>(function FoldingLetter(
@@ -1109,7 +1113,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
               <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+                <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={STICKER_INK} strokeWidth={1.8} />
               </BottomIconSurface>
             </View>
           )}
@@ -1123,15 +1127,15 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         >
           {({ pressed }) =>
             voice.recording ? (
-              <View style={[styles.micBtnShadow, roundBtnDynamicStyle, isNight && styles.micBtnShadowNight, pressed && styles.roundBtnPressed]}>
-                <View style={[styles.micBtn, roundBtnDynamicStyle, isNight ? styles.micBtnActiveNight : styles.micBtnActive]}>
-                  <Icon path={STOP_ICON} size={22 * bottomRowScale} color={isNight ? '#000000' : '#FFFFFF'} strokeWidth={1.8} />
+              <View style={[styles.micBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+                <View style={[styles.micBtn, roundBtnDynamicStyle, styles.micBtnActive]}>
+                  <Icon path={STOP_ICON} size={22 * bottomRowScale} color="#FFFFFF" strokeWidth={1.8} />
                 </View>
               </View>
             ) : (
               <View style={[styles.micBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <BottomIconSurface primary isNight={isNight} tintColor={throwGlass.tintWaterBlueStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
-                  <Icon path={MIC_ICON} size={27 * bottomRowScale} color="#C3EA4F" strokeWidth={1.9} />
+                <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlueStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
+                  <Icon path={MIC_ICON} size={25 * bottomRowScale} color={STICKER_INK} strokeWidth={1.8} />
                 </BottomIconSurface>
               </View>
             )
@@ -1181,7 +1185,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
                 <Icon
                   path={BELL_ICON}
                   size={25 * bottomRowScale}
-                  color={(selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null) ? '#FFFFFF' : isNight ? throwNightColor.iconColor : throwColor.ink}
+                  color={(selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null) ? '#FFFFFF' : STICKER_INK}
                   strokeWidth={1.8}
                 />
               </BottomIconSurface>
@@ -1194,7 +1198,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
               <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                <Icon path={INBOX_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.iconColor : throwColor.ink} strokeWidth={1.8} />
+                <Icon path={INBOX_ICON} size={25 * bottomRowScale} color={STICKER_INK} strokeWidth={1.8} />
               </BottomIconSurface>
               {unreadCount > 0 && (
                 <View style={[styles.badge, badgeDynamicStyle]}>
