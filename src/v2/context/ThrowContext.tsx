@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useId } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useFriends } from './FriendsContext';
@@ -120,7 +120,7 @@ interface ThrowContextValue {
   myName: string;
   myAvatarUrl: string | null;
   setMyLocation: (loc: ThrowLocation) => Promise<{ error: string | null }>;
-  /** Who can see my Throw location on the Friends Map — defaults to 'friends' (today's behavior).
+  /** Who can see my Throw location on the Friends Map — defaults to 'all' (everyone; 'friends' or 'ghost' narrow it).
    * See the LocationVisibility type for what each value means. */
   locationVisibility: LocationVisibility;
   setLocationVisibility: (visibility: LocationVisibility) => void;
@@ -172,7 +172,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
 
   const [loading, setLoading] = useState(true);
   const [myLocation, setMyLocationState] = useState<ThrowLocation | null>(null);
-  const [locationVisibility, setLocationVisibilityState] = useState<LocationVisibility>('friends');
+  const [locationVisibility, setLocationVisibilityState] = useState<LocationVisibility>('all');
   const [myProfile, setMyProfile] = useState<{ name: string; avatarUrl: string | null }>({ name: 'Myself', avatarUrl: null });
   const [friendLocations, setFriendLocations] = useState<Record<string, ThrowLocation>>({});
   const [rows, setRows] = useState<ThrowRow[]>([]);
@@ -186,7 +186,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   // give the effect that calls `refresh` a new identity every time it runs, looping forever.
   const latestMyLocationRef = useRef<ThrowLocation | null>(null);
   const latestMyProfileRef = useRef<{ name: string; avatarUrl: string | null }>({ name: 'Myself', avatarUrl: null });
-  const latestLocationVisibilityRef = useRef<LocationVisibility>('friends');
+  const latestLocationVisibilityRef = useRef<LocationVisibility>('all');
 
   const nameFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.name ?? 'Someone', [fsFriends]);
   const avatarFor = useCallback((userId: string) => fsFriends.find((f) => f.userId === userId)?.avatarUrl ?? null, [fsFriends]);
@@ -197,8 +197,8 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
   const cacheReady = useCachedBootstrap<ThrowCacheSnapshot>(myId, 'throw', (cached) => {
     setMyLocationState(cached.myLocation);
     latestMyLocationRef.current = cached.myLocation;
-    setLocationVisibilityState(cached.locationVisibility ?? 'friends');
-    latestLocationVisibilityRef.current = cached.locationVisibility ?? 'friends';
+    setLocationVisibilityState(cached.locationVisibility ?? 'all');
+    latestLocationVisibilityRef.current = cached.locationVisibility ?? 'all';
     setMyProfile(cached.myProfile);
     latestMyProfileRef.current = cached.myProfile;
     setFriendLocations(cached.friendLocations);
@@ -231,7 +231,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
       const loc = { city: d.city, country: d.country, latitude: d.latitude, longitude: d.longitude, updatedAt: d.updated_at ?? undefined };
       setMyLocationState(loc);
       latestMyLocationRef.current = loc;
-      const visibility = d.location_visibility ?? 'friends';
+      const visibility = d.location_visibility ?? 'all';
       setLocationVisibilityState(visibility);
       latestLocationVisibilityRef.current = visibility;
     }
@@ -299,10 +299,13 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [cacheReady, refresh]);
 
+  // Unique per provider: Throw and Map (both kept loaded as tabs) and Letters can each mount one,
+  // and Supabase reuses a channel with the same name, which crashes when callbacks are re-added.
+  const channelKey = useId();
   useEffect(() => {
     if (!myId) return;
     const channel = supabase
-      .channel(`throws-${myId}`)
+      .channel(`throws-${myId}-${channelKey}`)
       // Split out from a plain '*' so an INSERT's own `payload.new` can be read directly for the
       // latestIncoming toast below — UPDATE/DELETE (read receipts, deletes) still just reload.
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'throws', filter: `recipient_id=eq.${myId}` }, (payload) => {

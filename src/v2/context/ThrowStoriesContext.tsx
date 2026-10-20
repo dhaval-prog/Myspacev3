@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useId } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useThrow } from './ThrowContext';
@@ -101,12 +101,15 @@ export function ThrowStoriesProvider({ children }: { children: React.ReactNode }
     refresh();
   }, [cacheReady, refresh]);
 
+  // Unique per provider: Throw and Map (both kept loaded as tabs) and Letters can each mount one,
+  // and Supabase reuses a channel with the same name, which crashes when callbacks are re-added.
+  const channelKey = useId();
   useEffect(() => {
     if (!myId) return;
     // No single-column equality filter covers "any of my friends" (an ever-changing list), so
     // this listens unfiltered and just re-runs the real (RLS-scoped) query above — cheap enough
     // at this app's scale, same tradeoff ThrowContext's own poll makes.
-    const channel = supabase.channel(`throw-stories-${myId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'throw_stories' }, () => refresh()).subscribe();
+    const channel = supabase.channel(`throw-stories-${myId}-${channelKey}`).on('postgres_changes', { event: '*', schema: 'public', table: 'throw_stories' }, () => refresh()).subscribe();
     const poll = setInterval(refresh, POLL_MS);
     return () => {
       supabase.removeChannel(channel);

@@ -7,6 +7,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { anim, E, loop, skJig, skPeelOff, skPopR, skSlap, skSpin, skTwinkle, skUp } from '@/theme/anim';
 import { useStore } from '@/state/store';
 import { C, F, hard } from '@/theme/tokens';
+import { bootTapped, launchedFromAuth } from '@/ui/Boot';
 import { useAuth } from '@/v2/context/AuthContext';
 import { OutlinedText, Sheen, STAR4 } from '@/ui/kit';
 import { A, Icon, ICON, IS_WEB, Press, pushed, Stage, T, useY } from '@/ui/primitives';
@@ -88,15 +89,22 @@ const SPARKS: [number, number, number, number][] = [
 const intro = (name: Parameters<typeof anim>[0], dur: number, delay: number, ease?: Parameters<typeof anim>[3]) =>
   IS_WEB ? anim(name, 0.01, 0, 'linear') : anim(name, dur * 0.8, delay * 0.35, ease);
 
+// The splash greets every cold app launch, signed in or not. Coming back from Google / an email
+// link, or arriving here after signing in, goes straight on instead.
+const launch = { pending: !launchedFromAuth() };
+
 export default function Index() {
   const { session } = useAuth();
   const { afterAuth } = useStore();
-  // Signed in: skip onboarding. Right after sign-up we land on the pass instead of Chats.
-  if (session) return <Redirect href={(afterAuth || '/chat') as any} />;
-  return <Splash />;
+  const [cold] = useState(() => launch.pending);
+  useEffect(() => {
+    launch.pending = false;
+  }, []);
+  if (session && (afterAuth || !cold)) return <Redirect href={(afterAuth || '/chat') as any} />;
+  return <Splash dest={session ? '/chat' : '/welcome'} />;
 }
 
-function Splash() {
+function Splash({ dest }: { dest: '/chat' | '/welcome' }) {
   const y = useY();
   const [peeled, setPeeled] = useState<Record<number, boolean>>({});
   const [slap, setSlap] = useState<Record<number, number>>({});
@@ -107,13 +115,18 @@ function Splash() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
-    auto.current = setTimeout(() => router.replace('/welcome'), 9000);
+    // "Step inside" tapped on the launch image while the app was still loading.
+    if (bootTapped()) {
+      router.replace(dest);
+      return;
+    }
+    auto.current = setTimeout(() => router.replace(dest), 9000);
     const ts = timers.current;
     return () => {
       if (auto.current) clearTimeout(auto.current);
       ts.forEach(clearTimeout);
     };
-  }, []);
+  }, [dest]);
   const stopAuto = () => auto.current && clearTimeout(auto.current);
 
   const tapSticker = (i: number) => {
@@ -327,7 +340,7 @@ function Splash() {
       <A style={[{ position: 'absolute', left: 40, right: 40, bottom: 44 }, intro(skUp(), 0.5, 2)]}>
         <Press
           accessibilityRole="button"
-          onPress={() => router.replace('/welcome')}
+          onPress={() => router.replace(dest)}
           pressed={pushed(4, 1)}
           style={{
             flexDirection: 'row',

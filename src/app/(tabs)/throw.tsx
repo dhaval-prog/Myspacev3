@@ -1,6 +1,8 @@
 // Throw — Myspace v2's Throw screen (real map, letters, stories, weather), unchanged.
 import { router, useLocalSearchParams } from 'expo-router';
 
+import { toTab } from '@/ui/nav';
+
 import { useFriends } from '@/v2/context/FriendsContext';
 import { ThrowScreen } from '@/v2/screens/throw/ThrowScreen';
 import type { NotificationTarget } from '@/v2/utils/notify';
@@ -10,7 +12,7 @@ export default function Throw() {
   const { openChat, goRequests, receivedRequests } = useFriends();
 
   const openTarget = (target: NotificationTarget) => {
-    if (target.screen === 'expenses') router.replace({ pathname: '/pocket/[id]', params: { id: target.cardId } });
+    if (target.screen === 'expenses') toTab({ pathname: '/pocket/[id]', params: { id: target.cardId } });
     else if (target.screen === 'friends') {
       if (receivedRequests.some((r) => r.connectionId === target.connectionId)) goRequests();
       else openChat(target.connectionId);
@@ -22,11 +24,11 @@ export default function Throw() {
   return (
     <ThrowScreen
       key={`${focus ?? ''}|${throwId ?? ''}`}
-      onHome={() => router.replace('/throw')}
-      onOpenExpenses={() => router.replace('/pocket')}
-      onOpenChats={() => router.replace('/chat')}
-      onOpenMap={() => router.replace('/map')}
-      onOpenGames={() => router.replace('/games')}
+      onHome={() => toTab('/throw')}
+      onOpenExpenses={() => toTab('/pocket')}
+      onOpenChats={() => toTab('/chat')}
+      onOpenMap={() => toTab('/map')}
+      onOpenGames={() => toTab('/games')}
       onOpenAddFriendScreen={() => router.push('/friends')}
       onNotificationTarget={openTarget}
       onOpenReceivedLetters={(contactId, opts) =>

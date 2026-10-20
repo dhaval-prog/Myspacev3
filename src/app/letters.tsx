@@ -1,5 +1,7 @@
 // Received Throw letters — Myspace v2's letters screen.
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+
+import { backToTab } from '@/ui/nav';
 
 import { ThrowReceivedLettersScreen } from '@/v2/screens/throw/ThrowReceivedLettersScreen';
 
@@ -9,11 +11,11 @@ export default function Letters() {
     <ThrowReceivedLettersScreen
       initialContactId={contact}
       viaToast={toast === '1'}
-      onOpenThrow={() => router.replace('/throw')}
-      onOpenChats={() => router.replace('/chat')}
-      onOpenMap={() => router.replace('/map')}
-      onOpenGames={() => router.replace('/games')}
-      onOpenExpenses={() => router.replace('/pocket')}
+      onOpenThrow={() => backToTab('/throw')}
+      onOpenChats={() => backToTab('/chat')}
+      onOpenMap={() => backToTab('/map')}
+      onOpenGames={() => backToTab('/games')}
+      onOpenExpenses={() => backToTab('/pocket')}
     />
   );
 }

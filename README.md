@@ -33,6 +33,8 @@ Google sign-in always opens Google's account chooser (`prompt=select_account`).
 
 ### Database
 
+Map visibility: `throw_profiles.location_visibility` defaults to `all` (everyone); people narrow it to `friends` or `ghost` with "Show me to" (Map) or Throw settings. Old values from before this change are in `throw_profiles_visibility_backup_20261020`. Throw's map background (`user_settings.throw_map_show_background`) defaults to on.
+
 `profiles.avatar_color` (smallint 0–7, nullable) stores each person's sticker colour so friends see it. Added by the `profiles_avatar_color` migration, which also makes `handle_new_user` copy `avatar_color` from sign-up metadata. Additive only; v2 ignores it.
 
 ## Deploy (web)
@@ -47,7 +49,7 @@ Launch speed: `public/index.html` shows the splash as a still image (`public/lau
 
 | Route | Screen | Data |
 | --- | --- | --- |
-| `/` | Splash (signed-in users skip to Chats) | — |
+| `/` | Splash on every app launch; "Step inside" → Chats (signed in) or sign-up | — |
 | `/welcome`, `/signup`, `/avatar` | Welcome, sign up, pick your look | Creates the Supabase account (name, colour, photo) |
 | `/login` | Log in (intercom) | Supabase sign-in, password reset |
 | `/verify` | Check mail | Resend confirmation email |
@@ -64,7 +66,7 @@ Launch speed: `public/index.html` shows the splash as a still image (`public/lau
 
 ## Code map
 
-- `src/app/` — routes (Expo Router). `_layout.tsx` gates routes on the Supabase session and mounts the signed-in providers.
+- `src/app/` — routes (Expo Router). `_layout.tsx` gates routes on the Supabase session and mounts the signed-in providers. `(tabs)/` holds Chat, Throw, Map, Games and Pocket as tabs that stay loaded (paused while hidden) so switching is instant; use `toTab()` / `backToTab()` from `src/ui/nav.ts` to move between them.
 - `src/v2/` — Myspace v2's data layer (`context/`, `lib/`, `types/`, `utils/`) and the screens reused as-is (Throw, chat threads, games, wallet, account). Ported unchanged apart from React Native 0.88 type fixes; excluded from ESLint (see `eslint.config.js`).
 - `src/state/` — local sign-up draft (`store.tsx`) and the signed-in profile + avatar upload (`profile.tsx`).
 - `src/theme/` — design tokens and every `sk*` / `gp*` keyframe from the handoff's `animations.css`.

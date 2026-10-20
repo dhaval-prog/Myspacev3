@@ -4,6 +4,8 @@
 // true bearing and distance is log-scaled around you.
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
+
+import { toTab } from '@/ui/nav';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, TextInput, View, type ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -18,7 +20,6 @@ import { Screen, TabBar } from '@/ui/Screen';
 import { FriendsMapCanvas } from '@/v2/components/friends/map/FriendsMapCanvas';
 import type { FriendsMapCameraCommand, FriendsMapCanvasPin } from '@/v2/components/friends/map/friendsMapCanvasTypes';
 import { FriendsMapPinAnchor } from '@/v2/components/friends/map/FriendsMapPinAnchor';
-import { useAuth } from '@/v2/context/AuthContext';
 import { useFriends } from '@/v2/context/FriendsContext';
 import { ThrowProvider, useThrow } from '@/v2/context/ThrowContext';
 import { MAPBOX_TOKEN } from '@/v2/lib/mapbox';
@@ -42,8 +43,6 @@ import { timeAgo } from '@/v2/utils/relativeTime';
 
 /** Real map everywhere except web builds without a Mapbox token (those keep the sticker map). */
 const REAL_MAP = Platform.OS !== 'web' || !!MAPBOX_TOKEN;
-/** Accounts created from v3 onwards show on the map to everyone by default (they can switch it off). */
-const V3_LAUNCH = Date.parse('2026-10-20T00:00:00Z');
 const DEFAULT_CAMERA = { zoom: 4, center: { latitude: 21.5, longitude: 79.5 } };
 
 type LL = { latitude: number; longitude: number };
@@ -196,7 +195,6 @@ const VIS_OPTIONS: [LocationVisibility, string][] = [
 
 function MapInner() {
   const y = useY();
-  const { user } = useAuth();
   const { myLocation, friends: throwFriends, loading, locationVisibility, setLocationVisibility } = useThrow();
   const { friends, openChat, sendRequestToUser } = useFriends();
   const [extra, setExtra] = useState<MapRow[] | null>(null);
@@ -216,22 +214,6 @@ function MapInner() {
     z.value = withTiming(zoom, { duration: 450, easing: Easing.bezier(0.2, 0.8, 0.3, 1) });
   }, [zoom, z]);
   const mapSt = useAnimatedStyle(() => ({ transform: [{ scale: z.value }] }));
-
-  // Accounts made in v3 show on the map to everyone unless they've chosen otherwise. Runs once,
-  // after Throw has loaded the real setting (people from v2 keep what they had).
-  const defaulted = useRef(false);
-  useEffect(() => {
-    if (defaulted.current || loading || !myLocation || !user) return;
-    defaulted.current = true;
-    const meta = user.user_metadata ?? {};
-    const isV3 = meta.avatar_color != null || Date.parse(user.created_at) >= V3_LAUNCH;
-    if (meta.map_choice || locationVisibility !== 'friends' || !isV3) return;
-    setLocationVisibility('all');
-    supabase.auth
-      .updateUser({ data: { map_choice: 'default' } })
-      .catch(() => {})
-      .finally(() => setChosen((c) => c ?? 'all'));
-  }, [loading, myLocation, user, locationVisibility, setLocationVisibility]);
 
   const chooseVisibility = (v: LocationVisibility) => {
     if (v === shownAs) return;
@@ -613,7 +595,7 @@ function MapInner() {
                         {c.isFriend ? (
                           <>
                             <Press
-                              onPress={() => router.replace({ pathname: '/throw', params: { focus: c.userId } })}
+                              onPress={() => toTab({ pathname: '/throw', params: { focus: c.userId } })}
                               accessibilityRole="button"
                               accessibilityLabel={`Throw a letter to ${c.name}`}
                               style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 999, backgroundColor: C.tomato, borderWidth: 2, borderColor: C.ink, paddingVertical: 6 }}>
@@ -667,7 +649,7 @@ function MapInner() {
               </View>
             ) : !myLocation ? (
               <Press
-                onPress={() => router.replace('/throw')}
+                onPress={() => toTab('/throw')}
                 accessibilityRole="button"
                 style={{ width: 350, borderRadius: 22, borderWidth: 2, borderStyle: 'dashed', borderColor: C.ink, padding: 20, gap: 4 }}>
                 <T f={F.b7} s={14} center>

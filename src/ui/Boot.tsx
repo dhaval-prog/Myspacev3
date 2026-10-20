@@ -27,3 +27,17 @@ export function hideBoot() {
     setTimeout(() => el.remove(), 260);
   }, 120);
 }
+
+type BootWindow = { __launchUrl?: string; __bootGo?: boolean };
+const bootWindow = (): BootWindow | null => (Platform.OS === 'web' && typeof window !== 'undefined' ? (window as unknown as BootWindow) : null);
+
+/** Web: the app was opened by a sign-in redirect (Google, email link) rather than launched fresh. */
+export function launchedFromAuth() {
+  const url = bootWindow()?.__launchUrl ?? '';
+  return /[#&?](access_token|code|error_description)=/.test(url);
+}
+
+/** Web: "Step inside" was tapped on the launch image before the app finished loading. */
+export function bootTapped() {
+  return !!bootWindow()?.__bootGo;
+}

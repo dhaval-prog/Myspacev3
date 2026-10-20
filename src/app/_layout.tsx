@@ -137,16 +137,12 @@ function Routes() {
         </Stack.Protected>
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="success" />
+          <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
           <Stack.Screen name="friends" />
-          <Stack.Screen name="chat" options={{ animation: 'none' }} />
           <Stack.Screen name="thread" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="throw" options={{ animation: 'none' }} />
           <Stack.Screen name="letters" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="map" options={{ animation: 'none' }} />
-          <Stack.Screen name="games/index" options={{ animation: 'none' }} />
           <Stack.Screen name="games/npat" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="games/trivia" options={{ animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="pocket" options={{ animation: 'none' }} />
           <Stack.Screen name="account" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="look" options={{ animation: 'slide_from_bottom' }} />
         </Stack.Protected>

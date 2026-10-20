@@ -2,6 +2,8 @@
 import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+
+import { backToTab } from '@/ui/nav';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View, type ViewStyle } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -166,7 +168,7 @@ export default function Friends() {
           contentContainerStyle={{ flexGrow: 1, paddingTop: top + 7, paddingHorizontal: 24, paddingBottom: 22 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Press
-              onPress={() => (router.canGoBack() ? router.back() : router.replace('/chat'))}
+              onPress={() => (router.canGoBack() ? router.back() : backToTab('/chat'))}
               accessibilityLabel="Back"
               style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,.65)', borderWidth: 1, borderColor: 'rgba(255,255,255,.7)', alignItems: 'center', justifyContent: 'center' }}>
               <Icon d={ICON.back} size={18} color={I} sw={2} />
@@ -365,7 +367,7 @@ export default function Friends() {
           <Press
             onPress={() => {
               goChats();
-              router.replace('/chat');
+              backToTab('/chat');
             }}
             accessibilityRole="button"
             pressed={{ opacity: 0.7 }}
