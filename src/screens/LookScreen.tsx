@@ -12,7 +12,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useSetOwnAvatarColor } from '@/state/avatarColors';
 import { saveAvatarColor, uploadAvatar, useMyProfile } from '@/state/profile';
 import { SWATCH_NAMES, SWATCHES, useStore } from '@/state/store';
-import { useAuth } from '@/v2/context/AuthContext';
+import { authReturnUrl, useAuth } from '@/v2/context/AuthContext';
 import { supabase } from '@/v2/lib/supabase';
 import { AvatarFace } from '@/ui/AvatarFace';
 import { anim, E, loop, skRepaint, skTwinkle } from '@/theme/anim';
@@ -84,7 +84,7 @@ export function LookScreen({ mode }: { mode: 'signup' | 'edit' }) {
     const { data, error: err } = await supabase.auth.signUp({
       email: s.email.trim(),
       password: s.pw,
-      options: { data: { full_name: s.name.trim(), avatar_color: s.av } },
+      options: { data: { full_name: s.name.trim(), avatar_color: s.av }, emailRedirectTo: authReturnUrl() },
     });
     setLoading(false);
     if (err) {

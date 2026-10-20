@@ -11,6 +11,14 @@ WebBrowser.maybeCompleteAuthSession();
 
 const nativeRedirectTo = makeRedirectUri();
 
+/** Where Supabase should send people back to after Google or an email link: this app, not v2.
+ * Web adds a trailing slash so it matches allow-list patterns like `https://myspacev3*.vercel.app/**`
+ * (without it Supabase rejects the address and falls back to the Site URL, which is v2). */
+export function authReturnUrl(): string | undefined {
+  if (Platform.OS !== 'web') return nativeRedirectTo;
+  return typeof window !== 'undefined' ? `${window.location.origin}/` : undefined;
+}
+
 /** Reads OAuth params from both the query string and the #fragment of a redirect URL. */
 function getQueryParams(url: string): { params: Record<string, string>; errorCode: string | null } {
   const params: Record<string, string> = {};
@@ -103,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: { data: { full_name: fullName.trim() } },
+          options: { data: { full_name: fullName.trim() }, emailRedirectTo: authReturnUrl() },
         });
         return { error: error?.message ?? null };
       },
@@ -121,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { error } = await supabase.auth.signInWithOAuth({
             provider,
             options: {
-              redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+              redirectTo: authReturnUrl(),
               // Always show Google's account page instead of silently reusing the last consent.
               queryParams: provider === 'google' ? { prompt: 'select_account' } : undefined,
             },
