@@ -12,6 +12,10 @@ npx expo start --web    # web preview, drawn inside a 390×844 phone frame
 
 Checks: `npx tsc --noEmit` and `npx eslint src`.
 
+## Deploy (web)
+
+`vercel.json` builds the web version (`npm run build` → `dist/`) and serves it as a single-page app. On vercel.com: **Add New → Project → import `dhaval-prog/Myspacev3`** and deploy with the defaults. Every push to `main` redeploys.
+
 ## Screens
 
 | Route | Screen |
