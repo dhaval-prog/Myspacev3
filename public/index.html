@@ -23,38 +23,56 @@
         /* Same cobalt as the splash, so there's never a white frame before the app paints. */
         background: #2b4bff;
       }
+      /* Launch screen: the splash (screenshot of its final layout) shown before any JS runs.
+         Lives outside #root and is faded out by hideBoot() (src/ui/Boot.tsx) once the app is ready. */
       #boot {
         position: fixed;
         inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        z-index: 2147483647;
+        background: #2b4bff;
+        transition: opacity 0.24s ease-out;
+      }
+      #boot.gone {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #boot .col {
+        position: relative;
+        height: 100%;
+        max-width: 480px;
+        margin: 0 auto;
+        overflow: hidden;
         background-color: #2b4bff;
-        background-image: radial-gradient(circle at 50% 40%, rgba(158, 179, 255, 0.6), rgba(43, 75, 255, 0) 55%),
-          radial-gradient(rgba(255, 255, 255, 0.1) 1.2px, transparent 1.2px);
+        background-image: radial-gradient(circle at 50% 35%, rgba(158, 179, 255, 0.6), rgba(43, 75, 255, 0) 55%),
+          radial-gradient(circle, rgba(255, 255, 255, 0.1) 1.2px, transparent 1.2px);
         background-size: 100% 100%, 16px 16px;
       }
-      #boot .tile {
-        width: 132px;
-        height: 132px;
+      #boot .hero {
+        position: absolute;
+        left: 50%;
+        margin-left: -195px;
+        top: calc(max(env(safe-area-inset-top), 14px) - 14px);
+        width: 390px;
+        height: 690px;
+      }
+      #boot .go {
+        position: absolute;
+        left: 40px;
+        right: 40px;
+        bottom: 44px;
+        height: 59px;
         box-sizing: border-box;
-        border-radius: 34px;
-        background: radial-gradient(circle at 30% 22%, #fff0a8, #ffd23f 50%, #f2b90f);
-        border: 4px solid #111;
-        box-shadow: 0 0 0 7px #fff, 0 0 0 10px #111, 8px 10px 0 10px #111, 0 26px 40px rgba(0, 0, 40, 0.4);
-        transform: rotate(-6deg);
+        border: 2px solid #111;
+        border-radius: 20px;
+        background: #ffd23f;
+        box-shadow: 5px 5px 0 #111;
         display: flex;
         align-items: center;
         justify-content: center;
-        animation: bootPulse 1.4s ease-in-out infinite;
       }
-      #boot img {
-        width: 88px;
-        height: 88px;
-      }
-      @keyframes bootPulse {
-        0%, 100% { transform: rotate(-6deg) scale(1); }
-        50% { transform: rotate(-4deg) scale(1.05); }
+      #boot .go img {
+        width: 148px;
+        height: 35px;
       }
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {
@@ -69,6 +87,7 @@
     </style>
 
     <!-- "Add to Home Screen" icon for Android/Chrome (via the web manifest) and other PWA-aware browsers. -->
+    <link rel="preload" as="image" href="/launch-hero.webp" fetchpriority="high" />
     <link rel="manifest" href="/manifest.json" />
     <!-- iOS Safari ignores the manifest for its home-screen icon and looks for this instead. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -85,9 +104,13 @@
       You need to enable JavaScript to run this app.
     </noscript>
     <!-- The root element for your Expo app. -->
-    <div id="root">
-      <!-- Shown until the app renders (React replaces it). -->
-      <div id="boot"><div class="tile"><img src="/splash-logo.png" alt="Myspace" /></div></div>
+    <div id="root"></div>
+    <!-- Launch screen, shown until the app is ready (see #boot above). -->
+    <div id="boot" aria-hidden="true">
+      <div class="col">
+        <img class="hero" src="/launch-hero.webp" alt="" />
+        <div class="go"><img src="/launch-step-inside.webp" alt="" /></div>
+      </div>
     </div>
 
     <!-- iOS Safari's keyboard-avoidance shifts the whole page up while a text input is focused
