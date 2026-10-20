@@ -19,7 +19,7 @@ Checks: `npx tsc --noEmit` and `npx eslint src`.
 | Variable | Needed for |
 | --- | --- |
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Pointing at a different Supabase project |
-| `EXPO_PUBLIC_MAPBOX_TOKEN`, `EXPO_PUBLIC_MAPBOX_STYLE_URL` | Throw's map **on web** (native uses the platform map) |
+| `EXPO_PUBLIC_MAPBOX_TOKEN`, `EXPO_PUBLIC_MAPBOX_STYLE_URL`, `EXPO_PUBLIC_MAPBOX_FRIENDS_MAP_STYLE_URL` | The real map on Map and Throw **on web** (native uses Apple/Google Maps). Without a token, web Map falls back to the sticker map. |
 
 ### Google sign-in setup (one-time, Supabase dashboard)
 
@@ -28,6 +28,8 @@ Supabase only redirects back to URLs on its allow-list and otherwise falls back 
 - `https://myspacev3*.vercel.app/**` (production + preview deploys) and any custom domain
 - `myspacev3://**` (the native app — v3 uses its own scheme so sign-in never opens the v2 app)
 - `http://localhost:8081/**` for local web dev
+
+Google sign-in always opens Google's account chooser (`prompt=select_account`).
 
 ### Database
 
@@ -52,7 +54,7 @@ On phones the web app fills the screen; on desktop it shows as a centred mobile-
 | `/chat` | Chats | Friends, groups, last message, unread, online, typing, requests |
 | `/thread` | Chat thread, group chat, requests, new group, QR scanner | v2 screens |
 | `/throw`, `/letters` | Throw + received letters | v2 screens |
-| `/map` | Map | Friends' shared locations (+ people sharing with everyone) |
+| `/map` | Map (Mapbox) | Everyone sharing a location: friends + people who show themselves to everyone ("Add friend" on strangers). "Show me to" switch: Everyone / Friends / Hidden; accounts made in v3 default to Everyone |
 | `/games`, `/games/npat`, `/games/trivia` | Games hub; real multiplayer NPAT and Trivia | Leaderboard/points; v2 game screens |
 | `/pocket`, `/pocket/[id]`, `/pocket/manage` | Pocket cards, card detail, full wallet | Budget cards, spends; v2 wallet for new/join/members/history |
 | `/look` | Pick your look (change colour/photo any time) | `profiles.avatar_color` / `avatar_url` |

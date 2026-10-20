@@ -120,7 +120,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (Platform.OS === 'web') {
           const { error } = await supabase.auth.signInWithOAuth({
             provider,
-            options: { redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined },
+            options: {
+              redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+              // Always show Google's account page instead of silently reusing the last consent.
+              queryParams: provider === 'google' ? { prompt: 'select_account' } : undefined,
+            },
           });
           return { error: error?.message ?? null };
         }
@@ -130,7 +134,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // for it to hand back a `myspacev3://` deep link with the session.
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider,
-          options: { redirectTo: nativeRedirectTo, skipBrowserRedirect: true },
+          options: {
+            redirectTo: nativeRedirectTo,
+            skipBrowserRedirect: true,
+            queryParams: provider === 'google' ? { prompt: 'select_account' } : undefined,
+          },
         });
         if (error) return { error: error.message };
         if (!data?.url) return { error: 'Could not start sign-in.' };
