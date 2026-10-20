@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { ActivityIndicator, ScrollView, View, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { useMyProfile } from '@/state/profile';
 import { firstOf } from '@/state/store';
 import { anim, E, loop, skBob, skPin, skPop, skRing, skSlap, skSlideIn, skUp } from '@/theme/anim';
 import { C, F } from '@/theme/tokens';
@@ -70,6 +71,7 @@ export default function Chat() {
   const { top } = useStatusBar();
   const f = useFriends();
   const { user } = useAuth();
+  const { profile } = useMyProfile();
   const justIds = new Set(f.justAccepted.map((x) => x.connectionId));
 
   const rows: Row[] = [
@@ -123,14 +125,11 @@ export default function Chat() {
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <A style={anim(skPop(), 0.45, 0.15, E.s14)}>
               <Press
-                onPress={() => {
-                  f.goCreateGroup();
-                  router.push('/thread');
-                }}
-                accessibilityLabel="New group"
+                onPress={() => router.push('/look')}
+                accessibilityLabel="Pick your look"
                 pressed={{ transform: [{ translateX: 2 }, { translateY: 2 }] }}
-                style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,.8)', borderWidth: 1.5, borderColor: I, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon d={ICON.groups} size={21} color={I} sw={1.9} />
+                style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: I, overflow: 'hidden', boxShadow: `2px 2px 0 ${I}` }}>
+                {user ? <Person id={user.id} name={profile?.name ?? ''} avatarUrl={profile?.avatarUrl} size={48} font={16} /> : null}
               </Press>
             </A>
             <A style={anim(skPop(), 0.45, 0.2, E.s14)}>
@@ -380,7 +379,7 @@ export default function Chat() {
           </A>
         ))}
       </ScrollView>
-      <TabBar active="chat" delay={0.35} />
+      <TabBar active="chat" />
     </Screen>
   );
 }

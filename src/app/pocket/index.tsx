@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View, type ViewStyle } from 'react-native';
 
 import { useMyProfile } from '@/state/profile';
-import { initialsOf } from '@/state/store';
 import { E } from '@/theme/anim';
 import { C, dots, F, hard, inr } from '@/theme/tokens';
+import { Person } from '@/ui/Person';
 import { A, Press, T, useStatusBar, useY } from '@/ui/primitives';
 import { Screen, TabBar } from '@/ui/Screen';
+import { useAuth } from '@/v2/context/AuthContext';
 import { useExpenses } from '@/v2/context/ExpensesContext';
 import { parseAmount } from '@/v2/utils/expensesFormat';
 
@@ -16,6 +17,7 @@ export default function Pocket() {
   const { top } = useStatusBar();
   const y = useY();
   const { profile } = useMyProfile();
+  const { user } = useAuth();
   const { deck, expensesFor, loading } = useExpenses();
   const [sel, setSel] = useState<string | null>(null);
   const t = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,12 +44,10 @@ export default function Pocket() {
           Pocket
         </T>
         <Press
-          onPress={() => router.push('/account')}
-          accessibilityLabel="Account settings"
-          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.tomato, borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', ...hard(2) }}>
-          <T f={F.b8} s={14} c="#fff">
-            {initialsOf(profile?.name ?? '')}
-          </T>
+          onPress={() => router.push('/look')}
+          accessibilityLabel="Pick your look"
+          style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: C.ink, overflow: 'hidden', ...hard(2) }}>
+          {user ? <Person id={user.id} name={profile?.name ?? ''} avatarUrl={profile?.avatarUrl} size={40} font={14} ink={C.ink} /> : null}
         </Press>
       </View>
       <View
@@ -171,7 +171,7 @@ export default function Pocket() {
           ADD OR JOIN A CARD
         </T>
       </Press>
-      <TabBar active="pocket" tone="ink" delay={0.2} />
+      <TabBar active="pocket" />
     </Screen>
   );
 }

@@ -2,6 +2,8 @@ import React from 'react';
 import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, fontFamily } from '../../theme';
 import { avatarSkinFor, initialsOf, type AvatarSkin } from '../../utils/friendAvatar';
+import { useAvatarColor } from '@/state/avatarColors';
+import { SWATCHES } from '@/state/store';
 
 interface FriendAvatarProps {
   userId: string;
@@ -54,7 +56,10 @@ export function FriendAvatar({
   radius,
   initialsFontFamily,
 }: FriendAvatarProps) {
-  const skin: AvatarSkin = colorOverride ?? (pending ? { bg: colors.ink10, fg: colors.ink55 } : avatarSkinFor(userId));
+  // v3: the person's chosen sticker colour (Pick your look) beats the id-hash rotation.
+  const chosen = useAvatarColor(colorOverride || pending ? null : userId);
+  const chosenSkin: AvatarSkin | null = chosen != null ? { bg: SWATCHES[chosen % SWATCHES.length][0], fg: SWATCHES[chosen % SWATCHES.length][1] } : null;
+  const skin: AvatarSkin = colorOverride ?? (pending ? { bg: colors.ink10, fg: colors.ink55 } : (chosenSkin ?? avatarSkinFor(userId)));
   const dim = { width: size, height: size, borderRadius: radius ?? size / 2 };
   const dotSize = onlineDotOverride?.size ?? Math.max(10, Math.round(size * 0.3));
   const dotRingWidth = onlineDotOverride?.ringWidth ?? Math.max(2, Math.round(dotSize * 0.18));

@@ -5,6 +5,7 @@ import { View, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { useAvatarColor } from '@/state/avatarColors';
 import { useMyProfile } from '@/state/profile';
 import { useStore } from '@/state/store';
 import { useAuth } from '@/v2/context/AuthContext';
@@ -32,6 +33,7 @@ const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 function Pass() {
   const { user } = useAuth();
   const { profile } = useMyProfile();
+  const ownColor = useAvatarColor(user?.id);
   const { friends } = useFriends();
   const { statsFor } = useGameStats();
   const [letters, setLetters] = useState(0);
@@ -130,7 +132,9 @@ function Pass() {
             </T>
           </View>
           <View style={{ paddingTop: 18, paddingHorizontal: 16, paddingBottom: 14, flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-            <View
+            <Press
+              onPress={() => router.push('/look')}
+              accessibilityLabel="Pick your look"
               style={{
                 width: 92,
                 height: 92,
@@ -140,8 +144,8 @@ function Pass() {
                 boxShadow: '0 0 0 2px #111, 0 8px 14px rgba(17,17,17,.25)',
                 transform: [{ rotate: '-6deg' }],
               }}>
-              <AvatarFace size={80} ring={4} font={30} name={profile?.name} color={profile?.avatarColor} photo={profile?.avatarUrl ?? null} />
-            </View>
+              <AvatarFace size={80} ring={4} font={30} name={profile?.name} color={ownColor ?? profile?.avatarColor} photo={profile?.avatarUrl ?? null} />
+            </Press>
             <View style={{ flexShrink: 1 }}>
               <T f={F.d8} s={23} lh={25} ls={-0.8}>
                 {profile?.name ?? ' '}

@@ -18,7 +18,7 @@ export type MyProfile = {
 };
 
 async function fetchProfile(user: User): Promise<MyProfile> {
-  const { data } = await supabase.from('profiles').select('full_name, username, avatar_url, friend_code, created_at').eq('id', user.id).maybeSingle();
+  const { data } = await supabase.from('profiles').select('full_name, username, avatar_url, friend_code, created_at, avatar_color').eq('id', user.id).maybeSingle();
   const meta = (user.user_metadata ?? {}) as { full_name?: string; avatar_color?: number };
   return {
     id: user.id,
@@ -26,7 +26,7 @@ async function fetchProfile(user: User): Promise<MyProfile> {
     username: data?.username ?? null,
     avatarUrl: data?.avatar_url ?? null,
     friendCode: data?.friend_code ?? null,
-    avatarColor: typeof meta.avatar_color === 'number' ? meta.avatar_color : 0,
+    avatarColor: typeof data?.avatar_color === 'number' ? data.avatar_color : typeof meta.avatar_color === 'number' ? meta.avatar_color : 0,
     createdAt: data?.created_at ?? user.created_at ?? null,
   };
 }

@@ -11,6 +11,7 @@ import { anim, skBlink, skShake } from '@/theme/anim';
 import { C, F, hard } from '@/theme/tokens';
 import { DrawPath } from '@/ui/kit';
 import { A, Icon, ICON, Press, pushed, T, useStatusBar } from '@/ui/primitives';
+import { GoogleG } from '@/ui/GoogleG';
 import { Screen } from '@/ui/Screen';
 
 type Buzz = 'idle' | 'check' | 'ok' | 'err';
@@ -85,7 +86,18 @@ export default function Login() {
   const [shake, setShake] = useState(0);
   const [remember, setRemember] = useState(true);
   const [errMsg, setErrMsg] = useState<string | null>(null);
-  const { signIn, resetPassword } = useAuth();
+  const { signIn, resetPassword, signInWithOAuth } = useAuth();
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleErr, setGoogleErr] = useState<string | null>(null);
+  // Web: the browser leaves for Google and returns to this site; native: an in-app browser
+  // session returns via the app's own myspacev3:// link. Either way the new session lands on Chats.
+  const google = async () => {
+    setGoogleErr(null);
+    setGoogleBusy(true);
+    const { error } = await signInWithOAuth('google');
+    setGoogleBusy(false);
+    if (error) setGoogleErr(error);
+  };
   const [resetNote, setResetNote] = useState<string | null>(null);
   const t = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (t.current && clearTimeout(t.current)), []);
@@ -377,6 +389,43 @@ export default function Login() {
               </View>
             </View>
           </A>
+          <View style={{ marginTop: 22, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flex: 1, height: 2, backgroundColor: 'rgba(17,17,17,.15)' }} />
+            <T f={F.b7} s={13} c="rgba(17,17,17,.55)">
+              or
+            </T>
+            <View style={{ flex: 1, height: 2, backgroundColor: 'rgba(17,17,17,.15)' }} />
+          </View>
+          <Press
+            onPress={google}
+            disabled={googleBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Log in with Google"
+            pressed={pushed(3, 1)}
+            style={{
+              marginTop: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              borderRadius: 18,
+              backgroundColor: '#fff',
+              borderWidth: 2,
+              borderColor: C.ink,
+              paddingVertical: 15,
+              opacity: googleBusy ? 0.7 : 1,
+              ...hard(4),
+            }}>
+            <GoogleG />
+            <T f={F.d8} s={17}>
+              {googleBusy ? 'Opening Google…' : 'Log in with Google'}
+            </T>
+          </Press>
+          {googleErr ? (
+            <T f={F.b6} s={13} c="#C8391F" center style={{ marginTop: 8 }}>
+              {googleErr}
+            </T>
+          ) : null}
           <View style={{ flex: 1, minHeight: 24 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
             <T s={14}>New here? </T>

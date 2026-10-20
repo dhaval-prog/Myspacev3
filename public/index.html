@@ -20,6 +20,41 @@
       html,
       body {
         height: 100%;
+        /* Same cobalt as the splash, so there's never a white frame before the app paints. */
+        background: #2b4bff;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #2b4bff;
+        background-image: radial-gradient(circle at 50% 40%, rgba(158, 179, 255, 0.6), rgba(43, 75, 255, 0) 55%),
+          radial-gradient(rgba(255, 255, 255, 0.1) 1.2px, transparent 1.2px);
+        background-size: 100% 100%, 16px 16px;
+      }
+      #boot .tile {
+        width: 132px;
+        height: 132px;
+        box-sizing: border-box;
+        border-radius: 34px;
+        background: radial-gradient(circle at 30% 22%, #fff0a8, #ffd23f 50%, #f2b90f);
+        border: 4px solid #111;
+        box-shadow: 0 0 0 7px #fff, 0 0 0 10px #111, 8px 10px 0 10px #111, 0 26px 40px rgba(0, 0, 40, 0.4);
+        transform: rotate(-6deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: bootPulse 1.4s ease-in-out infinite;
+      }
+      #boot img {
+        width: 88px;
+        height: 88px;
+      }
+      @keyframes bootPulse {
+        0%, 100% { transform: rotate(-6deg) scale(1); }
+        50% { transform: rotate(-4deg) scale(1.05); }
       }
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {
@@ -50,7 +85,10 @@
       You need to enable JavaScript to run this app.
     </noscript>
     <!-- The root element for your Expo app. -->
-    <div id="root"></div>
+    <div id="root">
+      <!-- Shown until the app renders (React replaces it). -->
+      <div id="boot"><div class="tile"><img src="/splash-logo.png" alt="Myspace" /></div></div>
+    </div>
 
     <!-- iOS Safari's keyboard-avoidance shifts the whole page up while a text input is focused
          (there's nothing to opt out of — it's not `body`'s own scroll, which `overflow: hidden`

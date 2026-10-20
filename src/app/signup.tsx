@@ -2,13 +2,13 @@
 import { router } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, TextInput, View, type ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 
 import { useStore } from '@/state/store';
 import { useAuth } from '@/v2/context/AuthContext';
 import { anim, E, loop, skNudge, skPop, skPopR, skShake, skStep } from '@/theme/anim';
 import { C, F } from '@/theme/tokens';
 import { Fill } from '@/ui/kit';
+import { GoogleG } from '@/ui/GoogleG';
 import { A, Icon, ICON, Press, T, useStatusBar } from '@/ui/primitives';
 import { Screen } from '@/ui/Screen';
 
@@ -29,17 +29,6 @@ function strength(pw: string) {
   let sc = [pw.length >= 8, /[A-Z]/.test(pw) && /[a-z]/.test(pw), /\d/.test(pw), /[^A-Za-z0-9]/.test(pw)].filter(Boolean).length;
   if (pw.length < 8 || !sc) sc = 1;
   return sc;
-}
-
-function GoogleG() {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 48 48">
-      <Path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-2.8-.4-4.1H24v7.8h11.9c-.2 2-1.5 4.9-4.4 6.9l6.4 4.9c4.1-3.8 6.9-9.4 6.9-15.5z" />
-      <Path fill="#34A853" d="M24 46c5.9 0 10.8-1.9 14.2-5.3l-6.8-5.2c-1.8 1.3-4.3 2.2-7.4 2.2-5.7 0-10.6-3.8-12.3-9l-6.9 5.4C8 41.3 15.4 46 24 46z" />
-      <Path fill="#FBBC05" d="M11.7 28.7c-.5-1.4-.7-2.9-.7-4.7s.3-3.3.7-4.7l-6.9-5.4C3.1 16.9 2 20.3 2 24s1.1 7.1 2.8 10.1l6.9-5.4z" />
-      <Path fill="#EA4335" d="M24 10.1c4 0 6.7 1.7 8.3 3.2l6-5.9C34.7 4 29.9 2 24 2 15.4 2 8 6.7 4.8 13.9l6.9 5.4C13.4 14 18.3 10.1 24 10.1z" />
-    </Svg>
-  );
 }
 
 export default function Signup() {
