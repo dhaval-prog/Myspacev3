@@ -41,6 +41,8 @@ Google sign-in always opens Google's account chooser (`prompt=select_account`).
 
 On phones the web app fills the screen; on desktop it shows as a centred mobile-width column.
 
+Launch speed: `public/index.html` shows the splash as a still image (`public/launch-hero.webp`) before any JavaScript runs, and `hideBoot()` lifts it once the app is ready. Mapbox GL and three.js load on demand (Map/Throw), and only the fonts the first screens need block launch. If you change the splash layout, re-capture `launch-hero.webp` so the two still match.
+
 ## Screens
 
 | Route | Screen | Data |

@@ -9,7 +9,7 @@ import { useStore } from '@/state/store';
 import { C, F, hard } from '@/theme/tokens';
 import { useAuth } from '@/v2/context/AuthContext';
 import { OutlinedText, Sheen, STAR4 } from '@/ui/kit';
-import { A, Icon, ICON, Press, pushed, Stage, T, useY } from '@/ui/primitives';
+import { A, Icon, ICON, IS_WEB, Press, pushed, Stage, T, useY } from '@/ui/primitives';
 import { Screen } from '@/ui/Screen';
 
 type StickerKey = 'plane' | 'chat' | 'friends' | 'pin' | 'heart' | 'pocket' | 'music';
@@ -82,6 +82,11 @@ const SPARKS: [number, number, number, number][] = [
   [164, 120, 24, 0.8],
   [-24, 128, 18, 1.2],
 ];
+
+/** Entrance animation. On web the launch screen already showed this layout as a still image, so it
+ * appears in its final position straight away; on device the intro plays, quickly. */
+const intro = (name: Parameters<typeof anim>[0], dur: number, delay: number, ease?: Parameters<typeof anim>[3]) =>
+  IS_WEB ? anim(name, 0.01, 0, 'linear') : anim(name, dur * 0.8, delay * 0.35, ease);
 
 export default function Index() {
   const { session } = useAuth();
@@ -180,7 +185,7 @@ function Splash() {
           key={'logo' + logoN}
           style={[
             { position: 'absolute', left: 115, top: y(180), width: 160, height: 160 },
-            logoN ? anim(skJig(), 0.55, 0, 'ease-in-out') : anim(skPopR(0), 0.7, 0.15, E.s14),
+            logoN ? anim(skJig(), 0.55, 0, 'ease-in-out') : intro(skPopR(0), 0.7, 0.15, E.s14),
           ]}>
           <Press onPress={tapLogo} accessibilityLabel="Myspace logo">
             <View
@@ -224,7 +229,7 @@ function Splash() {
         {/* wordmark */}
         <View style={{ position: 'absolute', left: 0, right: 0, top: y(384), flexDirection: 'row', justifyContent: 'center', gap: 1 }}>
           {LETTERS.map((ch, i) => (
-            <A key={i} style={anim(skPopR(LETTER_R[i]), 0.45, 0.55 + i * 0.07, E.s14)}>
+            <A key={i} style={intro(skPopR(LETTER_R[i]), 0.45, 0.55 + i * 0.07, E.s14)}>
               <OutlinedText
                 color={i < 2 ? C.sun : '#fff'}
                 style={{ fontFamily: F.d8, fontSize: 66, lineHeight: 70, letterSpacing: -2 }}
@@ -235,7 +240,7 @@ function Splash() {
             </A>
           ))}
         </View>
-        <A style={[{ position: 'absolute', left: 0, right: 0, top: y(462) }, anim(skUp(), 0.5, 1.3)]}>
+        <A style={[{ position: 'absolute', left: 0, right: 0, top: y(462) }, intro(skUp(), 0.5, 1.3)]}>
           <T
             f={F.cav7}
             s={27}
@@ -255,7 +260,7 @@ function Splash() {
               key={`${i}-${pe}-${m}`}
               style={[
                 { position: 'absolute', left: x, top: y(sy), width: s, height: s },
-                pe ? anim(skPeelOff(r), 0.55, 0, 'ease-in') : anim(skSlap(r), 0.45, m ? 0 : d, E.s12),
+                pe ? anim(skPeelOff(r), 0.55, 0, 'ease-in') : m ? anim(skSlap(r), 0.45, 0, E.s12) : intro(skSlap(r), 0.45, d, E.s12),
               ]}>
               <Press
                 onPress={() => tapSticker(i)}
@@ -310,7 +315,7 @@ function Splash() {
                 paddingHorizontal: 14,
                 ...hard(3),
               },
-              capN ? anim(skSlap(capR), 0.4, 0, E.s12) : anim(skUp(), 0.5, 2.2),
+              capN ? anim(skSlap(capR), 0.4, 0, E.s12) : intro(skUp(), 0.5, 2.2),
             ]}>
             <T f={F.b7} s={15}>
               {cap || 'tap a sticker ✦'}
@@ -319,7 +324,7 @@ function Splash() {
         </View>
       </Stage>
 
-      <A style={[{ position: 'absolute', left: 40, right: 40, bottom: 44 }, anim(skUp(), 0.5, 2)]}>
+      <A style={[{ position: 'absolute', left: 40, right: 40, bottom: 44 }, intro(skUp(), 0.5, 2)]}>
         <Press
           accessibilityRole="button"
           onPress={() => router.replace('/welcome')}
