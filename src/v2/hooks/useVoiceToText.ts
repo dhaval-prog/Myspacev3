@@ -16,6 +16,7 @@ interface SpeechRecognitionModule {
     continuous?: boolean;
     addsPunctuation?: boolean;
     androidIntentOptions?: { EXTRA_ENABLE_LANGUAGE_DETECTION?: boolean; EXTRA_ENABLE_LANGUAGE_SWITCH?: string };
+    volumeChangeEventOptions?: { enabled?: boolean; intervalMillis?: number };
   }): void;
   stop(): void;
   requestPermissionsAsync(): Promise<{ granted: boolean }>;
@@ -45,6 +46,8 @@ interface UseVoiceToTextResult {
   recording: boolean;
   /** The current not-yet-final transcript, for a live "as you speak" preview. */
   interimText: string;
+  /** Live input loudness 0..1 while recording (native only; null when unknown, e.g. on web). */
+  level: number | null;
   error: string | null;
   start: () => Promise<void>;
   stop: () => void;
@@ -60,6 +63,7 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
   const [recording, setRecording] = useState(false);
   const [interimText, setInterimText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [level, setLevel] = useState<number | null>(null);
   const onFinalTextRef = useRef(onFinalText);
   onFinalTextRef.current = onFinalText;
 
@@ -90,8 +94,14 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
     );
   });
 
+  // Native reports loudness roughly in -2..10 — normalised to 0..1 for the mic button's sound bars.
+  useSpeechRecognitionEvent('volumechange', (event) => {
+    setLevel(Math.max(0, Math.min(1, (event.value + 2) / 12)));
+  });
+
   useSpeechRecognitionEvent('end', () => {
     setRecording(false);
+    setLevel(null);
     setInterimText('');
   });
 
@@ -108,6 +118,7 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
       interimResults: true,
       continuous: true,
       addsPunctuation: true,
+      volumeChangeEventOptions: { enabled: true, intervalMillis: 120 },
       // Lets Android's recognizer identify and switch to whatever language is actually being
       // spoken mid-session instead of staying locked to the starting `lang` — the closest thing
       // to real automatic language detection either platform offers (no iOS/web equivalent
@@ -124,9 +135,10 @@ export function useVoiceToText({ onFinalText }: UseVoiceToTextOptions): UseVoice
     // append normally — the `result` handler above doesn't gate on `recording` — so nothing said
     // right before stopping is lost, it just doesn't wait around for it.
     setRecording(false);
+    setLevel(null);
     setInterimText('');
     ExpoSpeechRecognitionModule.stop();
   }, []);
 
-  return { recording, interimText, error, start, stop };
+  return { recording, interimText, level, error, start, stop };
 }

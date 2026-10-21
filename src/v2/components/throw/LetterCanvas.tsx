@@ -1,5 +1,6 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
-import { Image, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Platform, StyleSheet, TextInput, View } from 'react-native';
+import { InkPrompt } from './letterFx';
 import { throwColor, throwFont, throwNightColor, throwRadius } from '../../theme/throwTokens';
 import type { StrokePath } from '../../types/throw';
 
@@ -33,6 +34,14 @@ interface LetterCanvasProps {
    * the paper's own top edge (currently only the self-reminder schedule picker, see FoldingLetter's
    * alertSchedule prop), measured rather than guessed since that content's own height varies. */
   extraTopPadding?: number;
+  /** Who the letter is to — used by the written-in-ink prompts ("Tell Priya about your day…"). */
+  recipientName?: string;
+  /** Bumped by the parent on a tap of the paper — the prompt's pen gives a wiggle. */
+  wiggleKey?: number;
+  /** Tap/press on the writing surface (focus, long-press tracking). */
+  onFocusPaper?: () => void;
+  onPressInPaper?: () => void;
+  onPressOutPaper?: () => void;
 }
 
 export interface LetterCanvasHandle {
@@ -47,6 +56,10 @@ export interface LetterCanvasHandle {
   /** Wipes the written text back to blank — used by the self-reminder's "X" (clear) button,
    * which abandons the whole draft rather than editing it. */
   clearText: () => void;
+  /** Replaces the written text (Undo after crumpling/clearing the letter). */
+  setText: (text: string) => void;
+  /** The committed text right now. */
+  getText: () => string;
 }
 
 /**
@@ -56,7 +69,10 @@ export interface LetterCanvasHandle {
  * the plane's baked texture, so the writing surface and the measured surface need to be the same
  * rectangle.
  */
-export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas({ onContentChange, hasPhoto, isNight, extraTopPadding }, ref) {
+export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(function LetterCanvas(
+  { onContentChange, hasPhoto, isNight, extraTopPadding, recipientName, wiggleKey = 0, onFocusPaper, onPressInPaper, onPressOutPaper },
+  ref,
+) {
   const [typedText, setTypedText] = useState('');
   // The current phrase's not-yet-final transcript — shown live appended after typedText (see
   // displayText below) so dictated words appear on the paper as they're spoken, not only once
@@ -64,6 +80,9 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
   // result replaces it via appendText, which is what actually persists the words.
   const [interimText, setInterimTextState] = useState('');
   const penColor = isNight ? throwNightColor.ink : INK_BLUE;
+  const typedTextRef = React.useRef('');
+  typedTextRef.current = typedText;
+  const topPad = 66 + (hasPhoto ? 34 : 0) + (extraTopPadding ?? 0);
 
   useImperativeHandle(
     ref,
@@ -80,6 +99,11 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
         setTypedText('');
         setInterimTextState('');
       },
+      setText: (text: string) => {
+        setInterimTextState('');
+        setTypedText(text);
+      },
+      getText: () => typedTextRef.current,
     }),
     [],
   );
@@ -109,12 +133,23 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
           styles.typedInput,
           // Both reservations stack additively (a self-reminder can have both a photo and the
           // schedule picker showing at once) rather than one clobbering the other.
-          { paddingTop: 66 + (hasPhoto ? 34 : 0) + (extraTopPadding ?? 0) },
+          { paddingTop: topPad },
           { color: penColor },
         ]}
         multiline
-        placeholder="Write something for your loved one"
-        placeholderTextColor={isNight ? throwNightColor.placeholder : INK_BLUE}
+        accessibilityLabel={`Write a letter${recipientName ? ` to ${recipientName}` : ''}`}
+        onFocus={onFocusPaper}
+        onPressIn={onPressInPaper}
+        onPressOut={onPressOutPaper}
+        // react-native-web's TextInput ignores onPressIn/Out, so the long-press uses pointer events there.
+        {...(Platform.OS === 'web'
+          ? ({
+              onPointerDown: onPressInPaper,
+              onPointerUp: onPressOutPaper,
+              onPointerCancel: onPressOutPaper,
+              onPointerLeave: onPressOutPaper,
+            } as object)
+          : null)}
         value={displayText}
         // Ignores edits while a live interim transcript is showing — the box is displaying
         // dictated-but-not-yet-final words the user isn't meant to be typing over at that exact
@@ -126,6 +161,17 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
         editable={!interimText}
         textAlignVertical="center"
       />
+      {/* The prompt writes itself in like ink while the paper is blank (v3). */}
+      {!typedText && !interimText ? (
+        <InkPrompt
+          key={recipientName ?? 'self'}
+          name={recipientName ?? ''}
+          color={isNight ? throwNightColor.placeholder : INK_BLUE}
+          wiggleKey={wiggleKey}
+          centered={Platform.OS !== 'web'}
+          style={Platform.OS === 'web' ? { top: topPad - 4 } : { top: topPad, bottom: 110 }}
+        />
+      ) : null}
     </View>
   );
 });

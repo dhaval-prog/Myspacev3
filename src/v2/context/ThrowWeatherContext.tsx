@@ -225,3 +225,8 @@ export function useThrowWeather(): ThrowWeatherContextValue {
   if (!ctx) throw new Error('useThrowWeather must be used within a ThrowWeatherProvider');
   return ctx;
 }
+
+/** Same as useThrowWeather, but null outside a ThrowWeatherProvider (e.g. the reply composer). */
+export function useThrowWeatherOptional(): ThrowWeatherContextValue | null {
+  return useContext(ThrowWeatherContext);
+}

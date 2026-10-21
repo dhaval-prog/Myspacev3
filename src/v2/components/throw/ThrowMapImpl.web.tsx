@@ -312,6 +312,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
             userId={pin.id}
             avatarUrl={pin.avatarUrl}
             fullName={pin.fullName}
+            bounceKey={pin.bounceKey}
             isSelf={pin.isSelf}
             selected={pin.selected}
             dimmed={pin.dimmed}
