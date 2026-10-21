@@ -17,7 +17,7 @@ export const E = {
 } as const;
 
 const cache = new Map<string, ReturnType<typeof css.keyframes>>();
-const kf = (key: string, frames: () => CSSAnimationKeyframes) => {
+export const kf = (key: string, frames: () => CSSAnimationKeyframes) => {
   let k = cache.get(key);
   if (!k) {
     k = css.keyframes(frames() as any);

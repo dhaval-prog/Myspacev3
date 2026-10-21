@@ -67,7 +67,7 @@ Launch speed:
 | `/games`, `/games/npat`, `/games/trivia` | Games hub; real multiplayer NPAT and Trivia | Leaderboard/points; v2 game screens |
 | `/pocket` | Pocket (v2 screen: card deck, wallet, add/join, members, history, transfers) | Budget cards and spends; `?card=<id>` opens a card |
 | `/look` | Pick your look (change colour/photo any time) | `profiles.avatar_color` / `avatar_url` |
-| `/account` | Account settings | v2 screen |
+| `/account` (and Throw's settings gear) | Account (Sticker design, `src/screens/AccountScreen.tsx`): profile, your sticker, Throw settings, friends & requests, security, data & privacy, danger zone | profiles, auth, throw_profiles, user_settings, friend_connections (`unblock_friend_connection` RPC), budget cards |
 
 ## Code map
 

@@ -7,7 +7,7 @@ import { throwColor } from '../../theme/throwTokens';
 import { ThrowLocationSetupScreen } from './ThrowLocationSetupScreen';
 import { ThrowHomeScreen } from './ThrowHomeScreen';
 import { ThrowLetterDetailScreen } from './ThrowLetterDetailScreen';
-import { ThrowSettingsScreen } from './ThrowSettingsScreen';
+import { AccountScreen } from '@/screens/AccountScreen';
 import type { NotificationTarget } from '../../utils/notify';
 
 interface ThrowScreenProps {
@@ -85,7 +85,8 @@ function ThrowNavigator({
   }
 
   if (screen.name === 'settings') {
-    return <ThrowSettingsScreen onBack={() => setScreen({ name: 'home' })} />;
+    // v3: the Sticker-style Account screen (handoff "Account Settings v4") replaces Throw Settings.
+    return <AccountScreen onBack={() => setScreen({ name: 'home' })} />;
   }
 
   if (screen.name === 'letter') {
