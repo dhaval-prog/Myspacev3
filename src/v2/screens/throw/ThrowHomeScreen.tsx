@@ -345,11 +345,10 @@ export function ThrowHomeScreen({
     setChromeHidden((prev) => (prev === hidden ? prev : hidden));
   };
 
-  // BottomNav also hides for the Add Status cards, the Notifications panel, and the inline
-  // received-letters panel — same fade+slide chrome mechanism, so each one's own bottom edge is
-  // free to extend all the way down once the dock is gone (see cardsOverlay/notificationsOverlay's
-  // own bottom interpolation below, and InlineReceivedLetters's own chipRowBottom prop).
-  const chromeShouldHide = storyFlow?.name === 'cards' || isNotificationsSelected || isReceivingSelected;
+  // v3: the menu bar stays visible on the Add Status cards and the Notifications panel (their
+  // cards end above it — see cardsOverlay/notificationsOverlay's bottom interpolation below).
+  // It still hides for the inline received-letters panel.
+  const chromeShouldHide = isReceivingSelected;
   useEffect(() => {
     Animated.timing(chromeOpacity, { toValue: chromeShouldHide ? 0 : 1, duration: 280, useNativeDriver: false }).start();
     setChromeHidden(chromeShouldHide);
