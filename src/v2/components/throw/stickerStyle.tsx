@@ -35,17 +35,17 @@ export function GlassFill() {
   );
 }
 
-/** Dark pill with a lime offset — the main action (like the Chats screen's add button). */
+/** Black pill, white text, white offset — the main action (black/white only, no lime, in Throw's cards). */
 export const stickerPrimary: ViewStyle = {
   backgroundColor: S.ink,
   borderWidth: 2,
   borderColor: S.ink,
-  boxShadow: `3px 3px 0 ${S.lime}`,
+  boxShadow: `3px 3px 0 #FFFFFF, 3px 3px 0 1.5px ${S.ink}`,
 } as ViewStyle;
 
-/** Lime pill with an ink outline and shadow — a secondary action. */
+/** White pill with a black outline, shadow and text — the inverse of the main action. */
 export const stickerSecondary: ViewStyle = {
-  backgroundColor: S.lime,
+  backgroundColor: '#FFFFFF',
   borderWidth: 2,
   borderColor: S.ink,
   boxShadow: `3px 3px 0 ${S.ink}`,
