@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
@@ -43,6 +43,8 @@ interface AddFriendCardProps {
    * link" button's own destination, reusing that screen's existing copy/QR/share chrome instead
    * of duplicating it here. */
   onOpenAddFriendScreen: () => void;
+  /** e.g. flex: 1 so the card fills the space left under ProfileCard and scrolls its list inside. */
+  style?: StyleProp<ViewStyle>;
 }
 
 /** "Add friend" — search by name/username, or a Suggested Nearby list (real distance from the
@@ -50,7 +52,7 @@ interface AddFriendCardProps {
  * link to the full invite-code screen. A solid white card, sitting directly below ProfileCard
  * while the recipient carousel's Add Status slot is selected — see ThrowHomeScreen's own
  * isCardsMode for when both show/hide together. */
-export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
+export function AddFriendCard({ onOpenAddFriendScreen, style }: AddFriendCardProps) {
   const { sendRequestToUser } = useFriends();
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Row[] | null>(null);
@@ -135,7 +137,7 @@ export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, style]}>
       <GlassFill />
       <Text style={styles.title}>Add friend</Text>
 
@@ -154,7 +156,7 @@ export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
 
       <Text style={styles.sectionLabel}>{isSearching ? 'RESULTS' : 'SUGGESTED NEARBY'}</Text>
 
-      <View style={styles.list}>
+      <ScrollView style={styles.listScroll} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
         {isSearching && searching ? (
           <ActivityIndicator color={throwColor.inkFaint} style={styles.loading} />
         ) : !isSearching && nearbyLoading ? (
@@ -164,7 +166,7 @@ export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
         ) : (
           rows.map(renderRow)
         )}
-      </View>
+      </ScrollView>
 
       <Pressable onPress={onOpenAddFriendScreen} style={styles.shareBtn} accessibilityRole="button" accessibilityLabel="Share invite link">
         <Icon path={LINK_ICON} size={16} color={S.ink} strokeWidth={2.2} />
@@ -193,6 +195,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   searchInput: { flex: 1, fontFamily: throwFont.ui400, fontSize: 14, color: throwColor.ink },
   sectionLabel: monoLabel,
+  listScroll: { flex: 1, minHeight: 60 },
   list: { gap: 2, minHeight: 40 },
   loading: { paddingVertical: 12 },
   empty: { fontFamily: 'Figtree_500Medium', fontSize: 13, color: S.faint, paddingVertical: 10 },

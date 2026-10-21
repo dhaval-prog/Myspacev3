@@ -270,6 +270,8 @@ export function ChatThreadScreen() {
                     onBreakSeal={() => setLetterDetail(m)}
                     body={m.throwId ? letterDetails[m.throwId]?.messageText : null}
                     media={m.throwId ? letterDetails[m.throwId]?.media : undefined}
+                    sealId={mine ? undefined : m.id}
+                    senderName={focusedFriend.name}
                   />
                 </AnimatedMessageWrap>
               );

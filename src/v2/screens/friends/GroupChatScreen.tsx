@@ -391,6 +391,8 @@ export function GroupChatScreen() {
                             toLabel={focusedGroup.name}
                             timeLabel={timeLabel(m.createdAt)}
                             onBreakSeal={() => setLetterDetail(m)}
+                            sealId={mine ? undefined : m.id}
+                            senderName={senderNameFor(m.senderId)}
                           />
                         </View>
                       </View>

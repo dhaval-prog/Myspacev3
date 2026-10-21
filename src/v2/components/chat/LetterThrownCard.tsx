@@ -2,7 +2,10 @@ import { Image } from 'expo-image';
 import React from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
+import { anim } from '@/theme/anim';
 import { fontFamily } from '../../theme';
+import { fxLetterReveal, SealedEnvelope, useLetterOpened } from './SealedEnvelope';
+import Animated from 'react-native-reanimated';
 
 const STRIPE_BLUE = '#2F6BFF';
 const CREAM = '#F6F1E6';
@@ -42,7 +45,13 @@ export function LetterThrownCard({
   onBreakSeal,
   body,
   media,
+  sealId,
+  senderName,
 }: {
+  /** A received letter: arrives as a sealed envelope (keyed by this id) that's opened in place. */
+  sealId?: string;
+  /** Whose initial goes on the wax seal. */
+  senderName?: string;
   title: string;
   /** The letter's full text (replaces the short title when loaded). */
   body?: string | null;
@@ -54,8 +63,35 @@ export function LetterThrownCard({
   timeLabel: string;
   onBreakSeal: () => void;
 }) {
+  const wasOpened = useLetterOpened(sealId);
+  const [justOpened, setJustOpened] = React.useState(false);
+  const sealed = !!sealId && !wasOpened && !justOpened;
+  if (sealed) {
+    return (
+      <View style={styles.stripeFrame}>
+        <AirmailStripe />
+        <View style={styles.inner}>
+          <View style={styles.topRow}>
+            <View style={styles.topText}>
+              <Text style={styles.kicker}>PAR AVION · TO {toLabel.toUpperCase()}</Text>
+              <Text style={styles.sealedTitle}>A letter for you</Text>
+            </View>
+            {place ? (
+              <View style={styles.postmark}>
+                <Text style={styles.postmarkText} numberOfLines={1}>
+                  {place}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <SealedEnvelope id={sealId} initial={(senderName ?? '?').trim().charAt(0).toUpperCase() || '?'} onOpened={() => setJustOpened(true)} />
+          <Text style={styles.time}>{timeLabel}</Text>
+        </View>
+      </View>
+    );
+  }
   return (
-    <View style={styles.stripeFrame}>
+    <Animated.View style={[styles.stripeFrame, justOpened ? anim(fxLetterReveal(), 0.6, 0, 'ease-out') : null]}>
       <AirmailStripe />
       <View style={styles.inner}>
         <View style={styles.topRow}>
@@ -78,11 +114,11 @@ export function LetterThrownCard({
           <Text style={styles.time}>{timeLabel}</Text>
           <Pressable onPress={onBreakSeal} style={styles.breakSeal} accessibilityRole="button" accessibilityLabel="Break seal">
             <View style={styles.breakSealDot} />
-            <Text style={styles.breakSealText}>Break seal</Text>
+            <Text style={styles.breakSealText}>{sealId ? 'Read letter' : 'Break seal'}</Text>
           </Pressable>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -166,6 +202,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: '#8A8A8A',
   },
+  sealedTitle: { fontFamily: 'Caveat_600SemiBold', fontSize: 20, lineHeight: 22, color: '#2346C8' },
   title: {
     fontFamily: 'Caveat_600SemiBold',
     fontSize: 22,

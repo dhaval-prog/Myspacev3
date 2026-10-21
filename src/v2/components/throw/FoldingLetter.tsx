@@ -1239,7 +1239,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         <ShutterFlash k={flashKey} />
         {mediaItems.length === 0 ? (
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]}>
-            <ToStamp label={hideBadges ? 'NOTE TO SELF' : `TO: ${recipientName.trim().split(/\s+/)[0].toUpperCase()}`} color={isNight ? '#9EB3FF' : '#2B4BFF'} />
+            <ToStamp label={hideBadges ? 'NOTE TO SELF' : `TO: ${recipientName.trim().split(/\s+/)[0].toUpperCase()}`} color="#2B4BFF" background={isNight ? '#FFFFFF' : undefined} />
           </Animated.View>
         ) : null}
 

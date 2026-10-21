@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 
 import { toTab } from '@/ui/nav';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, TextInput, View, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Linking, Platform, ScrollView, TextInput, View, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -349,6 +349,37 @@ function MapInner() {
     if (REAL_MAP) send({ center: camera.center, zoom: clampZoom(Math.round(camera.zoom) + d) });
     else setZoom((v) => (d > 0 ? Math.min(1.6, +(v + 0.2).toFixed(2)) : Math.max(0.7, +(v - 0.2).toFixed(2))));
   };
+  // The navigation button: hands off to Apple Maps / Google Maps — directions to the selected
+  // person, or your own spot when nobody is selected.
+  const [mapsMenu, setMapsMenu] = useState(false);
+  const mapsTarget = () => {
+    const c = sel ? all.find((p) => p.userId === sel) : null;
+    if (c) return { lat: c.lat, lon: c.lon, label: c.name, directions: true };
+    if (me) return { lat: me.latitude, lon: me.longitude, label: 'My location', directions: false };
+    return { lat: camera.center.latitude, lon: camera.center.longitude, label: 'Map', directions: false };
+  };
+  const openInMaps = (app: 'apple' | 'google') => {
+    setMapsMenu(false);
+    const t = mapsTarget();
+    const ll = `${t.lat},${t.lon}`;
+    const q = encodeURIComponent(t.label);
+    const url =
+      app === 'apple'
+        ? t.directions
+          ? `https://maps.apple.com/?daddr=${ll}&q=${q}`
+          : `https://maps.apple.com/?ll=${ll}&q=${q}`
+        : t.directions
+          ? `https://www.google.com/maps/dir/?api=1&destination=${ll}`
+          : `https://www.google.com/maps/search/?api=1&query=${ll}`;
+    Linking.openURL(url).catch(() => {});
+  };
+  const isApplePlatform =
+    Platform.OS === 'ios' || (Platform.OS === 'web' && typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent));
+  const onNavigate = () => {
+    // Android has no Apple Maps, so go straight to Google Maps there.
+    if (!isApplePlatform) openInMaps('google');
+    else setMapsMenu((v) => !v);
+  };
   const recenter = () => {
     setSel(null);
     if (!REAL_MAP) return setZoom(1);
@@ -515,12 +546,34 @@ function MapInner() {
           </Press>
         </View>
         <Press
-          onPress={recenter}
-          accessibilityLabel="Recenter"
+          onPress={onNavigate}
+          onLongPress={recenter}
+          accessibilityLabel="Open in Maps"
           pressed={pushed(2, 1, I)}
           style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#fff', borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center', ...hard(3) }}>
           <Icon d={ICON.locate} size={18} color={C.cobalt} sw={2.4} />
         </Press>
+        {mapsMenu ? (
+          <A style={[{ position: 'absolute', right: 0, top: 158, width: 168, gap: 6 }, anim(skPop(), 0.25)]}>
+            {(
+              [
+                ['apple', 'Apple Maps'],
+                ['google', 'Google Maps'],
+              ] as const
+            ).map(([k, label]) => (
+              <Press
+                key={k}
+                onPress={() => openInMaps(k)}
+                accessibilityLabel={`Open in ${label}`}
+                pressed={pushed(2, 1, I)}
+                style={{ height: 42, borderRadius: 21, backgroundColor: '#fff', borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center', ...hard(3) }}>
+                <T f={F.b5} s={14}>
+                  {label}
+                </T>
+              </Press>
+            ))}
+          </A>
+        ) : null}
       </A>
 
       {/* glass sheet — a shutter: flick it down to tuck it away, tap the people button to bring it back */}
