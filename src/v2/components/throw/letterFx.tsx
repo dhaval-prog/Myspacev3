@@ -9,6 +9,7 @@ import Svg, { Line, Path } from 'react-native-svg';
 
 import { anim, kf, loop } from '@/theme/anim';
 import { acConfetti } from '@/theme/animAccount';
+import { RealFlame } from './letterFxReal';
 
 export const FX_INK = '#16210C';
 const SUN = '#FFD23F';
@@ -45,6 +46,12 @@ export const fxSlapIn = (v: 'A' | 'B') =>
     '60%': { transform: [{ rotate: '-2deg' }, { scale: 0.97 }], opacity: 1 },
     '100%': { transform: [{ rotate: '-1deg' }, { scale: 1 }], opacity: 1 },
   }));
+/** The letter rising back into place once a sheet over it slides away. */
+export const fxBackIn = (v: 'A' | 'B') =>
+  kf('fxBackIn' + v, () => ({
+    '0%': { transform: [{ translateY: 36 }, { scale: 0.93 }], opacity: 0.5 },
+    '100%': { transform: [{ translateY: 0 }, { scale: 1 }], opacity: 1 },
+  }));
 export const fxWobble = (v: 'A' | 'B') =>
   kf('fxWobble' + v, () => ({
     '0%': { transform: [{ rotate: '0deg' }, { scale: 1 }] },
@@ -62,12 +69,6 @@ export const fxCrumple = () =>
     '75%': { transform: [{ translateX: 110 }, { translateY: 20 }, { scale: 0.2 }, { rotate: '220deg' }], opacity: 1, borderRadius: 200 },
     '100%': { transform: [{ translateX: 260 }, { translateY: -40 }, { scale: 0.16 }, { rotate: '330deg' }], opacity: 0, borderRadius: 200 },
   }));
-const fxPenWiggle = () =>
-  kf('fxPenWiggle', () => ({
-    '0%': { transform: [{ rotate: '-8deg' }] },
-    '50%': { transform: [{ rotate: '10deg' }] },
-    '100%': { transform: [{ rotate: '-8deg' }] },
-  }));
 const fxFlash = () => kf('fxFlash', () => ({ '0%': { opacity: 0 }, '15%': { opacity: 0.95 }, '100%': { opacity: 0 } }));
 export const fxPolaroidIn = () =>
   kf('fxPolaroidIn', () => ({
@@ -75,10 +76,6 @@ export const fxPolaroidIn = () =>
     '60%': { transform: [{ translateY: 2 }, { scale: 0.95 }, { rotate: '4deg' }], opacity: 1 },
     '100%': { transform: [{ translateY: 0 }, { scale: 1 }, { rotate: '0deg' }], opacity: 1 },
   }));
-const fxBar = () =>
-  kf('fxBar', () => ({ '0%': { transform: [{ scaleY: 0.35 }] }, '50%': { transform: [{ scaleY: 1 }] }, '100%': { transform: [{ scaleY: 0.35 }] } }));
-const fxPulseRing = () =>
-  kf('fxPulseRing', () => ({ '0%': { transform: [{ scale: 1 }], opacity: 0.55 }, '100%': { transform: [{ scale: 1.55 }], opacity: 0 } }));
 export const fxSwing = (v: 'A' | 'B') =>
   kf('fxSwing' + v, () => ({
     '0%': { transform: [{ rotate: '0deg' }] },
@@ -88,20 +85,11 @@ export const fxSwing = (v: 'A' | 'B') =>
     '75%': { transform: [{ rotate: '-6deg' }] },
     '100%': { transform: [{ rotate: '0deg' }] },
   }));
-const fxDialSpin = () => kf('fxDialSpin', () => ({ '0%': { transform: [{ rotate: '-540deg' }] }, '100%': { transform: [{ rotate: '0deg' }] } }));
 const fxStamp = () =>
   kf('fxStamp', () => ({
     '0%': { transform: [{ scale: 2.2 }, { rotate: '-14deg' }], opacity: 0 },
     '60%': { transform: [{ scale: 0.9 }, { rotate: '-8deg' }], opacity: 1 },
     '100%': { transform: [{ scale: 1 }, { rotate: '-8deg' }], opacity: 1 },
-  }));
-const fxFlicker = () =>
-  kf('fxFlicker', () => ({
-    '0%': { transform: [{ scale: 1 }, { rotate: '-4deg' }] },
-    '25%': { transform: [{ scale: 1.12 }, { rotate: '3deg' }] },
-    '50%': { transform: [{ scale: 0.94 }, { rotate: '-2deg' }] },
-    '75%': { transform: [{ scale: 1.08 }, { rotate: '5deg' }] },
-    '100%': { transform: [{ scale: 1 }, { rotate: '-4deg' }] },
   }));
 const fxRise = () =>
   kf('fxRise', () => ({
@@ -119,23 +107,6 @@ export const fxPlaneWiggle = () =>
   }));
 export const fxArrowBounce = () =>
   kf('fxArrowBounce', () => ({ '0%': { transform: [{ translateY: 0 }] }, '50%': { transform: [{ translateY: -7 }] }, '100%': { transform: [{ translateY: 0 }] } }));
-const fxDrop = () =>
-  kf('fxDrop', () => ({
-    '0%': { transform: [{ translateY: -10 }, { scale: 0.2 }], opacity: 0 },
-    '15%': { transform: [{ translateY: 0 }, { scale: 1.1 }], opacity: 0.85 },
-    '70%': { transform: [{ translateY: 26 }, { scale: 1 }], opacity: 0.7 },
-    '100%': { transform: [{ translateY: 40 }, { scale: 0.9 }], opacity: 0 },
-  }));
-const fxSnowSettle = () =>
-  kf('fxSnowSettle', () => ({ '0%': { transform: [{ translateY: -12 }], opacity: 0 }, '100%': { transform: [{ translateY: 0 }], opacity: 1 } }));
-const fxGlare = () =>
-  kf('fxGlare', () => ({
-    '0%': { transform: [{ translateX: -420 }, { rotate: '20deg' }], opacity: 0 },
-    '10%': { opacity: 0.55 },
-    '45%': { transform: [{ translateX: 420 }, { rotate: '20deg' }], opacity: 0.55 },
-    '46%': { opacity: 0 },
-    '100%': { transform: [{ translateX: 420 }, { rotate: '20deg' }], opacity: 0 },
-  }));
 export const fxPinBounce = (v: 'A' | 'B') =>
   kf('fxPinBounce' + v, () => ({
     '0%': { transform: [{ translateY: 0 }, { scale: 1 }] },
@@ -220,7 +191,6 @@ export function useShake(onShake: () => void, enabled = true) {
 // ---------------------------------------------------------------------------------------------
 // components
 
-const PEN = 'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4';
 
 /** The placeholder, written in like ink, cycling through prompts that use the recipient's name. */
 export function InkPrompt({ name, color, style, wiggleKey, centered }: { name: string; color: string; style?: ViewStyle; wiggleKey: number; centered?: boolean }) {
@@ -248,11 +218,6 @@ export function InkPrompt({ name, color, style, wiggleKey, centered }: { name: s
         {text.slice(0, n)}
         <Text style={{ opacity: 0 }}>{text.slice(n)}</Text>
       </Text>
-      <A key={'pen' + wiggleKey} style={[{ marginTop: 6 }, wiggleKey ? anim(fxSwing(wiggleKey % 2 ? 'A' : 'B'), 0.6, 0, 'ease-out') : loop(fxPenWiggle(), 1.6)]}>
-        <Svg width={22} height={22} viewBox="0 0 24 24">
-          <Path d={PEN} fill="none" stroke={color} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-      </A>
     </View>
   );
 }
@@ -324,9 +289,7 @@ export function StickerBadges({ streak, points, recipientKey, label }: { streak:
       {streak > 0 ? (
         <Pressable onPress={tapFlame} accessibilityRole="button" accessibilityLabel={`${streak} day throw streak with ${label}`} hitSlop={6}>
           <View style={[styles.badge, { backgroundColor: SUN, transform: [{ rotate: '-4deg' }] }]}>
-            <A style={loop(fxFlicker(), 1.1, 0, 'ease-in-out')}>
-              <Text style={styles.flame}>🔥</Text>
-            </A>
+            <RealFlame size={17} />
             <Text style={styles.badgeText}>{streak}</Text>
           </View>
           {plusOne ? (
@@ -371,54 +334,6 @@ const CONFETTI = Array.from({ length: 10 }, (_, i) => {
   return { dx: Math.round(Math.cos(a) * r), dy: Math.round(Math.sin(a) * r), rot: (i * 67) % 360, s: 6 + (i % 3) * 2, bg: [SUN, TOMATO, COBALT, LIME, SKY, BUBBLE][i % 6], round: i % 2 === 1, d: (i % 4) * 0.03 };
 });
 
-/** Rain drops, settled snow or a sunny glare on the paper, from Throw's weather setting. */
-export function PaperWeather({ condition, isNight }: { condition: string | null | undefined; isNight?: boolean }) {
-  if (!condition) return null;
-  if (condition === 'rain' || condition === 'thunderstorm') {
-    const drops = [
-      [0.12, 0.3, 0],
-      [0.78, 0.22, 1.1],
-      [0.4, 0.62, 2.3],
-      [0.86, 0.7, 3.2],
-      [0.2, 0.8, 4.1],
-    ];
-    return (
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        {drops.map(([x, y, d], i) => (
-          <A
-            key={i}
-            style={[
-              { position: 'absolute', left: `${x * 100}%`, top: `${y * 100}%`, width: 9, height: 12, borderTopLeftRadius: 6, borderTopRightRadius: 6, borderBottomLeftRadius: 6, borderBottomRightRadius: 6, backgroundColor: 'rgba(80,120,220,.28)', borderWidth: 1, borderColor: 'rgba(80,120,220,.45)' } as ViewStyle,
-              loop(fxDrop(), 5, d, 'ease-in'),
-            ]}
-          />
-        ))}
-      </View>
-    );
-  }
-  if (condition === 'snow') {
-    const blobs = Array.from({ length: 9 }, (_, i) => ({ left: `${i * 11.5 - 2}%`, w: 34 + ((i * 17) % 22), h: 12 + ((i * 7) % 8) }));
-    return (
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        {blobs.map((b, i) => (
-          <A key={'t' + i} style={[{ position: 'absolute', top: -6, left: b.left, width: b.w, height: b.h, borderRadius: b.h, backgroundColor: 'rgba(255,255,255,.92)' } as ViewStyle, anim(fxSnowSettle(), 0.9, i * 0.08, 'ease-out')]} />
-        ))}
-        {blobs.map((b, i) => (
-          <A key={'b' + i} style={[{ position: 'absolute', bottom: -6, left: b.left, width: b.w + 8, height: b.h + 4, borderRadius: b.h, backgroundColor: 'rgba(255,255,255,.95)', borderWidth: 1, borderColor: 'rgba(22,33,12,.06)' } as ViewStyle, anim(fxSnowSettle(), 1.1, 0.3 + i * 0.08, 'ease-out')]} />
-        ))}
-      </View>
-    );
-  }
-  if ((condition === 'sunny' || condition === 'clear') && !isNight) {
-    return (
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
-        <A style={[{ position: 'absolute', top: -60, bottom: -60, left: '45%', width: 70, backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0), rgba(255,250,220,.75), rgba(255,255,255,0))' } as ViewStyle, loop(fxGlare(), 6, 1, 'ease-in-out')]} />
-      </View>
-    );
-  }
-  return null;
-}
-
 /** Dashed fold lines that appear as the paper starts folding (driven by the fold progress). */
 export function FoldCreases({ progress, color = 'rgba(22,33,12,.35)' }: { progress: RNAnimated.Value; color?: string }) {
   const opacity = progress.interpolate({ inputRange: [0, 0.015, 0.12, 0.2], outputRange: [0, 1, 1, 0], extrapolate: 'clamp' });
@@ -432,66 +347,6 @@ export function FoldCreases({ progress, color = 'rgba(22,33,12,.35)' }: { progre
         <Line x1="78" y1="0" x2="50" y2="100" stroke={color} strokeWidth={0.4} strokeDasharray="2 2.5" />
       </Svg>
     </RNAnimated.View>
-  );
-}
-
-/** Pulse ring + sound bars around the mic button while recording; `level` (0..1) scales them when known. */
-export function SoundBars({ size, level }: { size: number; level: number | null }) {
-  const r = size / 2 + 9;
-  const bars = 10;
-  return (
-    <View pointerEvents="none" style={{ position: 'absolute', left: -20, top: -20, width: size + 40, height: size + 40, alignItems: 'center', justifyContent: 'center' }}>
-      <A style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: TOMATO }, loop(fxPulseRing(), 1.2, 0, 'ease-out')]} />
-      {Array.from({ length: bars }, (_, i) => {
-        const a = (i / bars) * 360;
-        const h = 6 + (level == null ? 6 : level * 12);
-        return (
-          <View key={i} style={{ position: 'absolute', width: 4, height: r * 2, alignItems: 'center', transform: [{ rotate: `${a}deg` }] }}>
-            <A style={[{ width: 4, height: h, borderRadius: 2, backgroundColor: FX_INK }, loop(fxBar(), 0.55 + (i % 3) * 0.12, (i % 5) * 0.08, 'ease-in-out')]} />
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-/** Reminder clock: spins in, then its hands turn to the picked time. */
-export function ClockDial({ hour, minute }: { hour: number; minute: number }) {
-  const hourDeg = ((hour % 12) + minute / 60) * 30;
-  const minDeg = minute * 6;
-  const hand = (len: number, w: number, deg: number, color: string) => (
-    <View
-      style={
-        {
-          position: 'absolute',
-          left: 46 - w / 2,
-          top: 46 - len,
-          width: w,
-          height: len,
-          borderRadius: w,
-          backgroundColor: color,
-          transformOrigin: 'bottom',
-          transform: [{ rotate: `${deg}deg` }],
-          transitionProperty: 'transform',
-          transitionDuration: '0.5s',
-          transitionTimingFunction: SPRING,
-        } as unknown as ViewStyle
-      }
-    />
-  );
-  return (
-    <View style={{ alignSelf: 'center', marginBottom: 14 }}>
-      <A style={[styles.dial, anim(fxDialSpin(), 0.9, 0, cubicBezier(0.2, 0.8, 0.3, 1.05))]}>
-        {Array.from({ length: 12 }, (_, i) => (
-          <View key={i} style={{ position: 'absolute', left: 45, top: 4, width: 2, height: 84, alignItems: 'center', transform: [{ rotate: `${i * 30}deg` }] }}>
-            <View style={{ width: i % 3 === 0 ? 3 : 2, height: i % 3 === 0 ? 9 : 5, borderRadius: 2, backgroundColor: FX_INK }} />
-          </View>
-        ))}
-        {hand(26, 4.5, hourDeg, FX_INK)}
-        {hand(36, 3, minDeg, TOMATO)}
-        <View style={{ position: 'absolute', left: 41, top: 41, width: 10, height: 10, borderRadius: 5, backgroundColor: SUN, borderWidth: 2, borderColor: FX_INK }} />
-      </A>
-    </View>
   );
 }
 

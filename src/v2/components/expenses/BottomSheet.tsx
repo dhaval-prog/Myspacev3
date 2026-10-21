@@ -16,10 +16,13 @@ interface BottomSheetProps {
   children: React.ReactNode;
   /** Cap the sheet's height (e.g. History, which needs to scroll a long list). */
   maxHeightRatio?: number;
+  /** Rendered inside the grab area with the handle, so the whole header (e.g. a title) can be
+   * dragged or flicked down to dismiss — not just the thin handle. */
+  dragHeader?: React.ReactNode;
 }
 
 /** Scrim + white sheet that slides up from the bottom — shared by every Expenses modal. */
-export function BottomSheet({ visible, onClose, children, maxHeightRatio }: BottomSheetProps) {
+export function BottomSheet({ visible, onClose, children, maxHeightRatio, dragHeader }: BottomSheetProps) {
   const reduceMotion = useReducedMotion();
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const [mounted, setMounted] = React.useState(visible);
@@ -62,7 +65,7 @@ export function BottomSheet({ visible, onClose, children, maxHeightRatio }: Bott
     if (dy > HANDLE_DISMISS_DISTANCE || velocityY > HANDLE_DISMISS_VELOCITY) {
       onCloseRef.current();
     } else {
-      Animated.timing(translateY, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+      Animated.spring(translateY, { toValue: 0, damping: 18, stiffness: 220, mass: 0.8, useNativeDriver: true }).start();
     }
   };
   const panResponder = useRef(
@@ -142,6 +145,10 @@ export function BottomSheet({ visible, onClose, children, maxHeightRatio }: Bott
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.wrap}>
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, styles.scrim, { opacity: translateY.interpolate({ inputRange: [0, SCREEN_HEIGHT * 0.6], outputRange: [1, 0], extrapolate: 'clamp' }) }]}
+        />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Dismiss" />
         <Animated.View
           style={[
@@ -152,11 +159,12 @@ export function BottomSheet({ visible, onClose, children, maxHeightRatio }: Bott
         >
           <View
             ref={handleRef}
-            style={styles.handleTouchArea}
+            style={[styles.handleTouchArea, dragHeader ? styles.headerTouchArea : null]}
             accessibilityLabel="Drag down to dismiss"
             {...(Platform.OS !== 'web' ? panResponder.panHandlers : null)}
           >
             <View style={styles.handle} />
+            {dragHeader}
           </View>
           {children}
         </Animated.View>
@@ -169,6 +177,8 @@ const styles = StyleSheet.create({
   wrap: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  scrim: {
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   sheet: {
@@ -187,6 +197,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: spacing.xs - 12,
   },
+  headerTouchArea: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: spacing.ms,
+    cursor: 'grab',
+  } as object,
   handle: {
     width: 44,
     height: 4,

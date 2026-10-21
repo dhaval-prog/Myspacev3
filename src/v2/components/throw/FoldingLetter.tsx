@@ -19,11 +19,9 @@ import Svg, { Path } from 'react-native-svg';
 import Reanimated from 'react-native-reanimated';
 import { anim, loop } from '@/theme/anim';
 import {
-  ClockDial,
   FoldCreases,
-  FX_OUT,
   fxArrowBounce,
-  fxCrumple,
+  fxBackIn,
   fxFloat,
   fxNewSheet,
   fxPlaneWiggle,
@@ -31,11 +29,9 @@ import {
   fxSlapIn,
   fxSwing,
   fxWobble,
-  PaperWeather,
   PopStamp,
   requestMotionPermission,
   ShutterFlash,
-  SoundBars,
   SPRING,
   StickerBadges,
   tick,
@@ -43,6 +39,7 @@ import {
   UndoToast,
   useShake,
 } from './letterFx';
+import { ballLandingTimes, CrumpleBall, CrumpleCreases, fxCrumplePaper, LiveMicRing, PaperWeather } from './letterFxReal';
 import { useThrowWeatherOptional } from '../../context/ThrowWeatherContext';
 import { INK_BLUE, LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
@@ -63,6 +60,8 @@ import type { AlertSchedule, MediaTrim, StrokePath } from '../../types/throw';
 
 // Same cap the in-app capture screen itself enforces while recording — a library-picked video
 // over this needs the trim screen before it can be attached (see the trim-queue state below).
+/** Crumple timeline: the sheet scrunches up, then the paper ball bounces away. */
+const CRUMPLE_BALL_SECONDS = 1.9;
 const LETTER_MAX_VIDEO_MS = 15000;
 
 const PHOTO_ICON = 'M4 8h4l1.6-2.5h4.8L16 8h4v11H4z M12 11.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
@@ -434,7 +433,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   // --- v3 playful layer -------------------------------------------------------------------------
   // How the sheet arrives: 'slap' (first mount / after clearing) or 'swap' (new recipient). A/B
   // alternate so the same animation can restart.
-  const [sheetAnim, setSheetAnim] = useState<{ kind: 'slap' | 'swap'; v: 'A' | 'B' }>({ kind: 'slap', v: 'A' });
+  const [sheetAnim, setSheetAnim] = useState<{ kind: 'slap' | 'swap' | 'back'; v: 'A' | 'B' }>({ kind: 'slap', v: 'A' });
   const lastRecipientRef = useRef(recipientName);
   useEffect(() => {
     if (lastRecipientRef.current === recipientName) return;
@@ -443,6 +442,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   }, [recipientName]);
   const [wiggle, setWiggle] = useState(0);
   const [crumpling, setCrumpling] = useState(false);
+  const [ballKey, setBallKey] = useState(0);
   const [undo, setUndo] = useState<{ text: string; media: PickedMedia[]; label: string } | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -539,6 +539,8 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     prevMediaCountRef.current = mediaItems.length;
   }, [mediaItems.length]);
 
+  /** After the reminder sheet slides away, the letter rises back into place. */
+  const letterComesBack = () => setSheetAnim((a) => ({ kind: 'back', v: a.v === 'A' ? 'B' : 'A' }));
   const cancelLongPress = () => {
     if (longPressRef.current) clearTimeout(longPressRef.current);
     longPressRef.current = null;
@@ -551,6 +553,11 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     const snapshot = { text: letterCanvasRef.current?.getText() ?? '', media: mediaItems, label };
     tick(true);
     setCrumpling(true);
+    // Paper crunches (a few small ticks), then the ball thuds on each bounce.
+    [120, 250].forEach((ms) => setTimeout(() => tick(), ms));
+    ballLandingTimes(CRUMPLE_BALL_SECONDS).forEach((sec, i) => setTimeout(() => tick(i === 0), sec * 1000));
+    setBallKey((k) => k + 1);
+    setTimeout(() => setBallKey(0), CRUMPLE_BALL_SECONDS * 1000 + 100);
     setTimeout(() => {
       letterCanvasRef.current?.clearText();
       setMediaItems([]);
@@ -1160,16 +1167,21 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   return (
     <View ref={wrapRef} style={styles.wrap}>
       {undo ? <UndoToast text={undo.label} onUndo={undoClear} /> : null}
+      {ballKey ? <CrumpleBall key={ballKey} duration={CRUMPLE_BALL_SECONDS} ink={isNight ? '#9EB3FF' : INK_BLUE} /> : null}
       {/* v3: the sheet slaps down (new recipient: old one slips out first), floats gently while
           writing, wobbles on a tap, and crumples away on a long-press or shake. */}
       <Reanimated.View
         style={[
           styles.paperArea,
-          sheetAnim.kind === 'swap' ? anim(fxNewSheet(sheetAnim.v), 0.75, 0, 'ease-out') : anim(fxSlapIn(sheetAnim.v), 0.45, 0, SPRING),
+          sheetAnim.kind === 'swap'
+            ? anim(fxNewSheet(sheetAnim.v), 0.75, 0, 'ease-out')
+            : sheetAnim.kind === 'back'
+              ? anim(fxBackIn(sheetAnim.v), 0.55, 0.12, SPRING)
+              : anim(fxSlapIn(sheetAnim.v), 0.45, 0, SPRING),
         ]}>
       <Reanimated.View style={[{ flex: 1 }, phase === 'writing' && !crumpling ? loop(fxFloat(), 4.5) : null]}>
       <Reanimated.View style={[{ flex: 1 }, wiggle ? anim(fxWobble(wiggle % 2 ? 'A' : 'B'), 0.55, 0, 'ease-out') : null]}>
-      <Reanimated.View style={[{ flex: 1 }, crumpling ? anim(fxCrumple(), 0.75, 0, FX_OUT) : null]}>
+      <Reanimated.View style={[{ flex: 1 }, crumpling ? anim(fxCrumplePaper(), 0.75, 0, 'linear') : null]}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         {/* Clips everything below to the paper's own rounded rect — a defensive boundary, not
             just tidy: on load, the bottom-controls row (and friends) briefly render at a
@@ -1206,8 +1218,9 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
 
         {/* Weather on the paper, fold creases while folding, and the shutter flash. */}
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]}>
-          <PaperWeather condition={weatherCtx?.weather} isNight={isNight} />
+          <PaperWeather condition={weatherCtx?.weather} intensity={weatherCtx?.intensity} reducedFlashing={weatherCtx?.reducedFlashing} isNight={isNight} />
         </Animated.View>
+        {crumpling ? <CrumpleCreases /> : null}
         <FoldCreases progress={progress} color={isNight ? 'rgba(255,255,255,.4)' : 'rgba(22,33,12,.35)'} />
         <ShutterFlash k={flashKey} />
         {mediaItems.length === 0 ? (
@@ -1309,7 +1322,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           {({ pressed }) =>
             voice.recording ? (
               <View style={[styles.micBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
-                <SoundBars size={roundBtnSize} level={voice.level} />
+                <LiveMicRing size={roundBtnSize} level={voice.level} activity={voice.interimText} />
                 <View style={[styles.micBtn, roundBtnDynamicStyle, styles.micBtnActive]}>
                   <Icon path={STOP_ICON} size={22 * bottomRowScale} color="#FFFFFF" strokeWidth={1.8} />
                 </View>
@@ -1479,12 +1492,14 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           owns that state, since it becomes a real throw_alerts row on throw); an ordinary letter
           to a friend uses its own local friendAlertSchedule instead (see its own doc comment) —
           the sheet itself is otherwise identical either way. */}
-      <BottomSheet visible={reminderState === 'open'} onClose={() => setReminderState('peek')}>
-        <Text style={styles.scheduleModalTitle}>Reminder</Text>
-        {(() => {
-          const sch = selfReminderMode ? alertSchedule! : friendAlertSchedule ?? DEFAULT_FRIEND_ALERT_SCHEDULE;
-          return <ClockDial hour={sch.hour} minute={sch.minute} />;
-        })()}
+      <BottomSheet
+        visible={reminderState === 'open'}
+        onClose={() => {
+          setReminderState('peek');
+          letterComesBack();
+        }}
+        dragHeader={<Text style={styles.scheduleModalTitle}>Reminder</Text>}
+      >
         <AlertScheduleHeader
           schedule={selfReminderMode ? alertSchedule! : friendAlertSchedule ?? DEFAULT_FRIEND_ALERT_SCHEDULE}
           onChange={selfReminderMode ? onAlertScheduleChange! : setFriendAlertSchedule}
@@ -1497,6 +1512,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             // is actually confirmed, same as a self-reminder always could not.
             setReminderConfirmed(true);
             setReminderState('peek');
+            letterComesBack();
             tick(true);
             setDing((n) => n + 1);
             setTimeout(() => setDing(0), 1900);
