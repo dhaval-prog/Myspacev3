@@ -530,7 +530,8 @@ function MapInner() {
         onLayout={(e) => {
           sheetH.set(e.nativeEvent.layout.height);
         }}
-        style={[{ position: 'absolute', left: 0, right: 0, bottom: 92 }, sheetSt]}>
+        // Runs to the bottom of the screen; the menu bar floats on top of it.
+        style={[{ position: 'absolute', left: 0, right: 0, bottom: 0 }, sheetSt]}>
       <A
         style={[
           {
@@ -545,7 +546,7 @@ function MapInner() {
           } as ViewStyle,
           anim(skSheet(260), 0.5, 0.2, E.sheet),
         ]}>
-        <View style={{ paddingTop: 10, paddingBottom: 14 }}>
+        <View style={{ paddingTop: 10, paddingBottom: 14 + 92 }}>
           <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,.85)', alignSelf: 'center', marginBottom: 12 }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 12 }}>
             <T f={F.d8} s={20} ls={-0.5} c="#fff">
