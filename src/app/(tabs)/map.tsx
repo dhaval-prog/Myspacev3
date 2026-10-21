@@ -2,7 +2,6 @@
 // device): friends plus anyone who shows themselves to everyone, so people can add friends they
 // find nearby. Without a Mapbox token on web it falls back to the sticker map, where direction is
 // true bearing and distance is log-scaled around you.
-import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 
 import { toTab } from '@/ui/nav';
@@ -59,7 +58,8 @@ function fitAbove(points: LL[], maxZoom = 12): { center: LL; zoom: number } | nu
 }
 
 const I = C.deep;
-const Lm = C.lime;
+/** Map's accent — blue instead of the app's lime (also the people sheet's colour). */
+const Lm = '#324AF5';
 // "You" sits here on the 790×1244 map canvas — mid-way between the search bar and the sheet.
 const ME_X = 393;
 const ME_Y = 565;
@@ -140,8 +140,8 @@ function PinGlyph({ c, on, delay }: { c: Contact; on: boolean; delay: number }) 
         </View>
       </Animated.View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: c.isFriend ? C.ink : '#fff', borderWidth: 2, borderColor: C.ink, borderRadius: 6, paddingVertical: 2, paddingHorizontal: 7 }}>
-        {c.live ? <A style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.isFriend ? Lm : '#4E6B1C' }, anim(skBlink(), 1.2, 0, 'linear', 'infinite')]} /> : null}
-        <T f={F.m7} s={9.5} ls={0.6} c={c.isFriend ? (c.live ? Lm : '#fff') : C.ink}>
+        {c.live ? <A style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.isFriend ? '#fff' : Lm }, anim(skBlink(), 1.2, 0, 'linear', 'infinite')]} /> : null}
+        <T f={F.m7} s={9.5} ls={0.6} c={c.isFriend ? '#fff' : C.ink}>
           {c.isFriend ? c.ago : c.live ? 'LIVE' : firstOf(c.name).toUpperCase()}
         </T>
       </View>
@@ -489,7 +489,7 @@ function MapInner() {
                   <T f={F.b6} s={13} c={on ? '#fff' : I}>
                     {label}
                   </T>
-                  <T f={F.dm4} s={11} c={on ? Lm : 'rgba(22,33,12,.5)'}>
+                  <T f={F.dm4} s={11} c={on ? '#fff' : 'rgba(22,33,12,.5)'}>
                     {n}
                   </T>
                 </Press>
@@ -536,20 +536,19 @@ function MapInner() {
           {
             borderTopLeftRadius: 30,
             borderTopRightRadius: 30,
-            borderWidth: 1.5,
+            borderWidth: 2,
             borderBottomWidth: 0,
-            borderColor: 'rgba(255,255,255,.75)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.9), 0 -10px 30px rgba(22,33,12,.12)',
+            borderColor: C.ink,
+            backgroundColor: Lm,
+            boxShadow: '0 -10px 30px rgba(22,33,12,.18)',
             overflow: 'hidden',
           } as ViewStyle,
           anim(skSheet(260), 0.5, 0.2, E.sheet),
         ]}>
-        <BlurView intensity={40} tint="light" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} />
-        <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.42)' }} />
         <View style={{ paddingTop: 10, paddingBottom: 14 }}>
-          <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: C.ink, alignSelf: 'center', marginBottom: 12 }} />
+          <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,.85)', alignSelf: 'center', marginBottom: 12 }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 12 }}>
-            <T f={F.d8} s={20} ls={-0.5}>
+            <T f={F.d8} s={20} ls={-0.5} c="#fff">
               {vis.length} {vis.length === 1 ? 'person' : 'people'} · {vis.filter((p) => p.live).length} live
             </T>
             <View style={{ backgroundColor: C.ink, borderRadius: 6, paddingVertical: 3, paddingHorizontal: 7 }}>
@@ -560,7 +559,7 @@ function MapInner() {
           </View>
           {myLocation ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingBottom: 10 }}>
-              <T f={F.m7} s={10} ls={0.8} c="rgba(22,33,12,.6)">
+              <T f={F.m7} s={10} ls={0.8} c="rgba(255,255,255,.8)">
                 SHOW ME TO
               </T>
               <View style={{ flexDirection: 'row', backgroundColor: '#fff', borderWidth: 2, borderColor: C.ink, borderRadius: 999, padding: 2 }} accessibilityRole="radiogroup" accessibilityLabel="Who can see you on the map">
@@ -573,7 +572,7 @@ function MapInner() {
                       accessibilityRole="radio"
                       accessibilityState={{ checked: on }}
                       style={{ paddingHorizontal: 11, paddingVertical: 4, borderRadius: 999, backgroundColor: on ? (v === 'ghost' ? C.ink : Lm) : 'transparent' }}>
-                      <T f={F.b7} s={12} c={on && v === 'ghost' ? '#fff' : C.ink}>
+                      <T f={F.b7} s={12} c={on ? '#fff' : C.ink}>
                         {label}
                       </T>
                     </Press>
@@ -653,7 +652,7 @@ function MapInner() {
                             onPress={() => !st && addFriend(c)}
                             accessibilityRole="button"
                             style={{ alignItems: 'center', borderRadius: 999, backgroundColor: st === 'sent' ? '#fff' : Lm, borderWidth: 2, borderColor: C.ink, paddingVertical: 6 }}>
-                            <T f={F.b8} s={12}>
+                            <T f={F.b8} s={12} c={st === 'sent' ? C.ink : '#fff'}>
                               {st === 'sent' ? 'Requested ✓' : st === 'sending' ? '…' : 'Add friend'}
                             </T>
                           </Press>
@@ -675,23 +674,23 @@ function MapInner() {
             })}
             {loading && !all.length ? (
               <View style={{ width: 350, padding: 26, alignItems: 'center' }}>
-                <ActivityIndicator color={I} />
+                <ActivityIndicator color="#fff" />
               </View>
             ) : !myLocation ? (
               <Press
                 onPress={() => toTab('/throw')}
                 accessibilityRole="button"
-                style={{ width: 350, borderRadius: 22, borderWidth: 2, borderStyle: 'dashed', borderColor: C.ink, padding: 20, gap: 4 }}>
-                <T f={F.b7} s={14} center>
+                style={{ width: 350, borderRadius: 22, borderWidth: 2, borderStyle: 'dashed', borderColor: '#fff', padding: 20, gap: 4 }}>
+                <T f={F.b7} s={14} c="#fff" center>
                   Set your location to see people nearby
                 </T>
-                <T s={12.5} c="rgba(22,33,12,.6)" center>
+                <T s={12.5} c="rgba(255,255,255,.8)" center>
                   Open Throw and share your city →
                 </T>
               </Press>
             ) : vis.length === 0 ? (
-              <View style={{ width: 350, borderRadius: 22, borderWidth: 2, borderStyle: 'dashed', borderColor: C.ink, padding: 26 }}>
-                <T f={F.b6} s={13} center>
+              <View style={{ width: 350, borderRadius: 22, borderWidth: 2, borderStyle: 'dashed', borderColor: '#fff', padding: 26 }}>
+                <T f={F.b6} s={13} c="#fff" center>
                   {all.length ? 'No one matches.' : 'No one nearby is sharing a location yet.'}
                 </T>
               </View>
@@ -711,10 +710,10 @@ function MapInner() {
             accessibilityLabel={`Show people (${vis.length})`}
             pressed={pushed(2, 1)}
             style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: Lm, borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center', ...hard(3) }}>
-            <Icon d={ICON.groups} size={24} color={C.ink} sw={2} />
+            <Icon d={ICON.groups} size={24} color="#fff" sw={2} />
             {vis.length ? (
               <View style={{ position: 'absolute', top: -6, right: -6, minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 5, backgroundColor: C.ink, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
-                <T f={F.m7} s={10} c={Lm}>
+                <T f={F.m7} s={10} c="#fff">
                   {vis.length}
                 </T>
               </View>

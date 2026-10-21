@@ -1,6 +1,6 @@
 // The one bottom menu bar used on every tab (v3 screens and the v2 screens: Throw, games, wallet…):
 // dark pill with the five tabs + a round action button. Active tab = tilted lime sticker
-// (white on Throw).
+// (white on Throw, blue on Map).
 // Same look and the same slide-up entrance everywhere.
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,6 @@ export const NAV: [TabId, string, string][] = [
   ['throw', ICON.throw, 'Throw'],
   ['map', ICON.map, 'Map'],
   ['games', ICON.games, 'Games'],
-  ['pocket', ICON.pocket, 'Pocket'],
 ];
 
 const I = C.deep;
@@ -35,8 +34,9 @@ type Props = {
 };
 
 export function NavDock({ active, onSelect, onAdd, fabIcon, fabLabel, floating = true }: Props) {
-  // Throw uses white instead of lime for the active sticker and the round button's icon.
-  const accent = active === 'throw' ? '#FFFFFF' : C.lime;
+  // Active sticker + round button icon: lime, except white on Throw and blue on Map.
+  const accent = active === 'throw' ? '#FFFFFF' : active === 'map' ? '#324AF5' : C.lime;
+  const onInk = active === 'map' ? '#FFFFFF' : I;
   const insets = useSafeAreaInsets();
   return (
     <A
@@ -56,7 +56,7 @@ export function NavDock({ active, onSelect, onAdd, fabIcon, fabLabel, floating =
       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: BAR, borderRadius: 999, padding: 6 }}>
         {NAV.map(([id, icon, label]) => {
           const on = id === active;
-          const c = on ? I : INACTIVE;
+          const c = on ? onInk : INACTIVE;
           return (
             <Press
               key={id}

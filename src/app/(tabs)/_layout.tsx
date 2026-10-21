@@ -17,7 +17,8 @@ export default function TabsLayout() {
     loaded.current.add(pathname.split('/')[1] ?? '');
     let timer: ReturnType<typeof setTimeout> | undefined;
     const next = () => {
-      const tab = TABS.find((t) => !loaded.current.has(t));
+      // Pocket isn't on the menu bar any more, so it isn't preloaded.
+      const tab = TABS.find((t) => t !== 'pocket' && !loaded.current.has(t));
       if (!tab) return;
       timer = setTimeout(() => {
         loaded.current.add(tab);
