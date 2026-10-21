@@ -7,7 +7,6 @@ import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import { Person } from '@/ui/Person';
 
 const INK = '#16210C';
-const LIME = '#C3EA4F';
 /** Teardrop size (the rotated square's side), regular and selected. */
 export const PIN_SIZE = 40;
 export const PIN_SIZE_SELECTED = 50;
@@ -22,7 +21,7 @@ interface LocationPinGlyphProps {
   /** Full name for the avatar's initials (the tag shows `label`). */
   fullName?: string;
   isSelf?: boolean;
-  /** The currently-selected recipient — bigger, with a lime ring. */
+  /** The currently-selected recipient — bigger, with a stronger shadow. */
   selected?: boolean;
   /** A friend who isn't the current selection — faded so the selected one reads clearly. */
   dimmed?: boolean;
@@ -44,7 +43,7 @@ export function LocationPinGlyph({ label, userId, avatarUrl, fullName, isSelf, s
             height: size,
             borderRadius: size / 2,
             borderBottomLeftRadius: 4,
-            backgroundColor: isSelf ? LIME : '#FFFFFF',
+            backgroundColor: '#FFFFFF',
             boxShadow: selected ? `4px 4px 0 ${INK}` : `2px 2px 0 ${INK}`,
           } as ViewStyle,
         ]}>
@@ -93,5 +92,5 @@ const styles = StyleSheet.create({
   tagSelf: { backgroundColor: INK },
   tagSelected: { backgroundColor: INK },
   tagText: { fontFamily: 'SpaceMono_700Bold', fontSize: 9.5, letterSpacing: 0.6, color: INK },
-  tagTextOn: { color: LIME },
+  tagTextOn: { color: '#FFFFFF' },
 });
