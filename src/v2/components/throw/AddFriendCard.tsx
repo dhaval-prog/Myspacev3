@@ -11,7 +11,7 @@ import {
   type NearbySuggestion,
   type ProfileSearchResult,
 } from '../../utils/addFriendSuggestions';
-import { S, monoLabel, stickerCard, stickerField, stickerSecondary } from './stickerStyle';
+import { S, monoLabel, stickerCard, stickerField, stickerSecondary, GlassFill } from './stickerStyle';
 
 const SEARCH_ICON = 'M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.35-4.35';
 const LINK_ICON = 'M9 17H7a5 5 0 010-10h2 M15 7h2a5 5 0 010 10h-2 M8 12h8';
@@ -136,6 +136,7 @@ export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
 
   return (
     <View style={styles.card}>
+      <GlassFill />
       <Text style={styles.title}>Add friend</Text>
 
       <View style={styles.searchBox}>

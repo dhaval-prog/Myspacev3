@@ -7,7 +7,7 @@ import { useNotifications, type AppNotification } from '../../context/Notificati
 import { useFriends } from '../../context/FriendsContext';
 import { targetForNotification, type NotificationTarget } from '../../utils/notify';
 import { throwColor, throwRadius } from '../../theme/throwTokens';
-import { S, monoLabel, stickerCard, stickerPrimary } from './stickerStyle';
+import { S, monoLabel, stickerCard, stickerPrimary, GlassFill } from './stickerStyle';
 
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const PLANE_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
@@ -165,6 +165,7 @@ export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
 
   return (
     <View style={styles.card}>
+      <GlassFill />
       {unreadCount > 0 && (
         <View style={styles.header}>
           <Pressable onPress={clearAll} accessibilityRole="button" accessibilityLabel="Mark all read">

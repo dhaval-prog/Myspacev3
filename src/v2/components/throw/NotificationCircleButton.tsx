@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    // v3 sticker circle: white, ink outline, hard shadow; lime once it's the current selection.
+    // v3 sticker circle: white, ink outline, hard shadow; sky blue once it's the current selection.
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: S.ink,
@@ -56,8 +56,8 @@ const styles = StyleSheet.create({
     boxShadow: `3px 3px 0 ${S.ink}`,
   } as ViewStyle,
   pressed: { transform: [{ translateX: 2 }, { translateY: 2 }] },
-  circleSelected: { backgroundColor: S.lime },
-  circleSelectedNight: { backgroundColor: S.lime },
+  circleSelected: { backgroundColor: S.sky },
+  circleSelectedNight: { backgroundColor: S.sky },
   badge: {
     position: 'absolute',
     right: -2,

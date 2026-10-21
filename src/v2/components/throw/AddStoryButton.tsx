@@ -34,7 +34,7 @@ export function AddStoryButton({ onPress, selected, isNight }: AddStoryButtonPro
         <View style={[styles.circle, selected && (isNight ? styles.circleSelectedNight : styles.circleSelected), pressed && styles.pressed]}>
           <Icon path={PERSON_ICON} size={26} color={S.ink} strokeWidth={2} />
           <View style={styles.badge}>
-            <Icon path={PLUS_ICON} size={12} color={throwColor.ink} strokeWidth={2.4} />
+            <Icon path={PLUS_ICON} size={12} color="#FFFFFF" strokeWidth={2.6} />
           </View>
         </View>
       )}
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    // v3 sticker circle: white, ink outline, hard shadow; lime once it's the current selection.
+    // v3 sticker circle: white, ink outline, hard shadow; sky blue once it's the current selection.
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: S.ink,
@@ -56,8 +56,8 @@ const styles = StyleSheet.create({
     boxShadow: `3px 3px 0 ${S.ink}`,
   } as ViewStyle,
   pressed: { transform: [{ translateX: 2 }, { translateY: 2 }] },
-  circleSelected: { backgroundColor: S.lime },
-  circleSelectedNight: { backgroundColor: S.lime },
+  circleSelected: { backgroundColor: S.sky },
+  circleSelectedNight: { backgroundColor: S.sky },
   badge: {
     position: 'absolute',
     right: -2,
@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     width: BADGE_SIZE,
     height: BADGE_SIZE,
     borderRadius: BADGE_SIZE / 2,
-    backgroundColor: S.lime,
+    backgroundColor: S.blue,
     borderWidth: 2,
     borderColor: S.ink,
     alignItems: 'center',
