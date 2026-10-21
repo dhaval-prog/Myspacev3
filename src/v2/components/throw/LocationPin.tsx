@@ -4,7 +4,11 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
+import Reanimated from 'react-native-reanimated';
+
+import { anim } from '@/theme/anim';
 import { Person } from '@/ui/Person';
+import { fxPinBounce } from './letterFx';
 
 const INK = '#16210C';
 /** Teardrop size (the rotated square's side), regular and selected. */
@@ -20,6 +24,8 @@ interface LocationPinGlyphProps {
   avatarUrl?: string | null;
   /** Full name for the avatar's initials (the tag shows `label`). */
   fullName?: string;
+  /** Changes when a letter lands with this person — the pin bounces. */
+  bounceKey?: number;
   isSelf?: boolean;
   /** The currently-selected recipient — bigger, with a stronger shadow. */
   selected?: boolean;
@@ -30,11 +36,11 @@ interface LocationPinGlyphProps {
 }
 
 /** The pin's visual with no positioning of its own — a native map Marker's child, and inside `LocationPin` on web. */
-export function LocationPinGlyph({ label, userId, avatarUrl, fullName, isSelf, selected, dimmed }: LocationPinGlyphProps) {
+export function LocationPinGlyph({ label, userId, avatarUrl, fullName, bounceKey, isSelf, selected, dimmed }: LocationPinGlyphProps) {
   const size = selected ? PIN_SIZE_SELECTED : PIN_SIZE;
   const inner = size - 10;
   return (
-    <View style={[styles.stack, dimmed && styles.dimmed]}>
+    <Reanimated.View style={[styles.stack, dimmed && styles.dimmed, bounceKey ? anim(fxPinBounce(bounceKey % 2 ? 'A' : 'B'), 0.9, 0.2, 'ease-out') : null]}>
       <View
         style={[
           styles.drop,
@@ -56,7 +62,7 @@ export function LocationPinGlyph({ label, userId, avatarUrl, fullName, isSelf, s
           {isSelf ? 'YOU' : label.toUpperCase()}
         </Text>
       </View>
-    </View>
+    </Reanimated.View>
   );
 }
 

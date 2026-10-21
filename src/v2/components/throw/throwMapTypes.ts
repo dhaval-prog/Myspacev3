@@ -8,6 +8,8 @@ export interface ThrowMapPin {
   /** Their photo and full name, for the sticker pin's avatar (initials). */
   avatarUrl?: string | null;
   fullName?: string;
+  /** Changes whenever a letter lands with this person — their pin bounces. */
+  bounceKey?: number;
   isSelf?: boolean;
   /** The currently-selected recipient — emphasized with a glowing ring. */
   selected?: boolean;

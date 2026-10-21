@@ -320,6 +320,7 @@ export function ThrowHomeScreen({
   const initializedRef = useRef(false);
 
   const [flight, setFlight] = useState<FlightState | null>(null);
+  const [landed, setLanded] = useState<{ id: string; n: number } | null>(null);
   // Fades (and slightly slides down) BottomNav *and* the top header bar in lockstep with
   // FoldingLetter's own fold amount — 0 (flat writing paper) keeps both fully visible, 1 (folded,
   // ready to throw) hides both, driven by the exact same value whether the fold was triggered by
@@ -762,6 +763,7 @@ export function ThrowHomeScreen({
         label: isSelf ? 'You' : f.name.split(' ')[0],
         avatarUrl: f.avatarUrl,
         fullName: f.name,
+        bounceKey: landed?.id === f.userId ? landed.n : undefined,
         isSelf,
         selected,
         dimmed: !selected && friendsWithLocation.length > 1,
@@ -773,13 +775,15 @@ export function ThrowHomeScreen({
     // entirely hidden behind the other — this fans coincident pins out into a small, still
     // visibly "same place" cluster so both are visible and tappable.
     return spreadCoincidentPins(list);
-  }, [friendsWithLocation, selectedFriendId, lockedRecipient, selfLocked, myId]);
+  }, [friendsWithLocation, selectedFriendId, lockedRecipient, selfLocked, myId, landed]);
 
   // Goes straight to the "delivered" card rather than first playing out a multi-second animated
   // flight across the map — per explicit request that a throw stay on the same page/map and just
   // confirm delivery, instead of a lengthy flight simulation taking over first.
   const runFlight = async (letter: ThrowLetter, isAlert: boolean, alertScheduleSummary?: string) => {
     const runId = ++flightRunIdRef.current;
+    // v3: the friend's pin bounces as the letter lands.
+    setLanded((l) => ({ id: letter.counterpartId, n: (l?.n ?? 0) + 1 }));
     const stillCurrent = () => flightRunIdRef.current === runId;
 
     setFlight({ letter, isAlert, alertScheduleSummary });

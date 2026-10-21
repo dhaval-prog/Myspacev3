@@ -16,6 +16,34 @@ import {
   ViewStyle,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import Reanimated from 'react-native-reanimated';
+import { anim, loop } from '@/theme/anim';
+import {
+  ClockDial,
+  FoldCreases,
+  FX_OUT,
+  fxArrowBounce,
+  fxCrumple,
+  fxFloat,
+  fxNewSheet,
+  fxPlaneWiggle,
+  fxPolaroidIn,
+  fxSlapIn,
+  fxSwing,
+  fxWobble,
+  PaperWeather,
+  PopStamp,
+  requestMotionPermission,
+  ShutterFlash,
+  SoundBars,
+  SPRING,
+  StickerBadges,
+  tick,
+  ToStamp,
+  UndoToast,
+  useShake,
+} from './letterFx';
+import { useThrowWeatherOptional } from '../../context/ThrowWeatherContext';
 import { INK_BLUE, LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
 import { PaperPlaneStage } from './PaperPlaneStage';
@@ -277,6 +305,53 @@ function BottomIconSurface({
   void primary;
   return <View style={[style, styles.iconSurface]}>{children}</View>;
 }
+/** A photo on the letter as a tilted polaroid held by tape: drops in, and peels off with an
+ * upward drag (downward drags fold the paper, sideways ones scroll / change recipient). */
+function Polaroid({ index, label, onRemove, children }: { index: number; label: string; onRemove: () => void; children: React.ReactNode }) {
+  const drag = useRef(new Animated.ValueXY()).current;
+  const gone = useRef(new Animated.Value(1)).current;
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_e, g) => g.dy < -6 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderMove: (_e, g) => drag.setValue({ x: g.dx * 0.6, y: Math.min(0, g.dy) }),
+        onPanResponderRelease: (_e, g) => {
+          if (g.dy < -45 || g.vy < -0.6) {
+            tick();
+            Animated.parallel([
+              Animated.timing(drag, { toValue: { x: g.dx, y: -220 }, duration: 260, useNativeDriver: false }),
+              Animated.timing(gone, { toValue: 0, duration: 260, useNativeDriver: false }),
+            ]).start(onRemove);
+          } else Animated.spring(drag, { toValue: { x: 0, y: 0 }, useNativeDriver: false, friction: 6 }).start();
+        },
+      }),
+    [drag, gone, onRemove],
+  );
+  const tilt = index % 2 ? 6 : -5;
+  return (
+    <Reanimated.View style={anim(fxPolaroidIn(), 0.5, 0, SPRING)}>
+      <Animated.View
+        {...responder.panHandlers}
+        accessibilityLabel={`Attached ${label} — drag up to remove`}
+        style={[
+          styles.photoThumbWrap,
+          {
+            opacity: gone,
+            transform: [
+              { translateX: drag.x },
+              { translateY: drag.y },
+              { rotate: drag.y.interpolate({ inputRange: [-200, 0], outputRange: [`${tilt - 25}deg`, `${tilt}deg`] }) },
+            ],
+          },
+        ]}>
+        {children}
+        <View pointerEvents="none" style={[styles.polaroidTape, { transform: [{ rotate: index % 2 ? '6deg' : '-5deg' }] }]} />
+      </Animated.View>
+    </Reanimated.View>
+  );
+}
+
 export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>(function FoldingLetter(
   {
     recipientName,
@@ -354,6 +429,27 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   const [stageFailed, setStageFailed] = useState(false);
   const letterCanvasRef = useRef<LetterCanvasHandle>(null);
   const voice = useVoiceToText({ onFinalText: (text) => letterCanvasRef.current?.appendText(text) });
+  const weatherCtx = useThrowWeatherOptional();
+
+  // --- v3 playful layer -------------------------------------------------------------------------
+  // How the sheet arrives: 'slap' (first mount / after clearing) or 'swap' (new recipient). A/B
+  // alternate so the same animation can restart.
+  const [sheetAnim, setSheetAnim] = useState<{ kind: 'slap' | 'swap'; v: 'A' | 'B' }>({ kind: 'slap', v: 'A' });
+  const lastRecipientRef = useRef(recipientName);
+  useEffect(() => {
+    if (lastRecipientRef.current === recipientName) return;
+    lastRecipientRef.current = recipientName;
+    setSheetAnim((a) => ({ kind: 'swap', v: a.v === 'A' ? 'B' : 'A' }));
+  }, [recipientName]);
+  const [wiggle, setWiggle] = useState(0);
+  const [crumpling, setCrumpling] = useState(false);
+  const [undo, setUndo] = useState<{ text: string; media: PickedMedia[]; label: string } | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [flashKey, setFlashKey] = useState(0);
+  const [bellSwing, setBellSwing] = useState(0);
+  const [ding, setDing] = useState(0);
+  const prevMediaCountRef = useRef(0);
 
   // Mirrors the live not-yet-final transcript onto the paper itself, in real time, as it's being
   // spoken — not just into the small "Listening…" hint below. Clears itself for free whenever
@@ -422,6 +518,10 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   React.useEffect(() => {
     const id = progress.addListener(({ value }) => {
       progressRef.current = value;
+      if (value > 0.01 && longPressRef.current) {
+        clearTimeout(longPressRef.current);
+        longPressRef.current = null;
+      }
       stageRef.current?.seek(value);
       latest.current.onFoldProgress?.(value);
     });
@@ -429,6 +529,54 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   }, [progress]);
 
   const hasContent = content.strokes !== null || (content.messageText?.trim().length ?? 0) > 0 || mediaItems.length > 0;
+
+  // A photo landing on the paper: shutter flash.
+  useEffect(() => {
+    if (mediaItems.length > prevMediaCountRef.current) {
+      setFlashKey((k) => k + 1);
+      tick();
+    }
+    prevMediaCountRef.current = mediaItems.length;
+  }, [mediaItems.length]);
+
+  const cancelLongPress = () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    longPressRef.current = null;
+  };
+  /** Crumple (or shake) the letter away; Undo brings it back. */
+  const clearLetter = (label: string) => {
+    if (phase !== 'writing' || !hasContent || crumpling) return;
+    cancelLongPress();
+    voice.recording && voice.stop();
+    const snapshot = { text: letterCanvasRef.current?.getText() ?? '', media: mediaItems, label };
+    tick(true);
+    setCrumpling(true);
+    setTimeout(() => {
+      letterCanvasRef.current?.clearText();
+      setMediaItems([]);
+      setCrumpling(false);
+      setSheetAnim((a) => ({ kind: 'slap', v: a.v === 'A' ? 'B' : 'A' }));
+      setUndo(snapshot);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = setTimeout(() => setUndo(null), 4500);
+    }, 750);
+  };
+  const undoClear = () => {
+    if (!undo) return;
+    letterCanvasRef.current?.setText(undo.text);
+    setMediaItems(undo.media);
+    setUndo(null);
+    setSheetAnim((a) => ({ kind: 'slap', v: a.v === 'A' ? 'B' : 'A' }));
+    tick();
+  };
+  // Timers and the shake listener call through a ref so they always see the latest letter.
+  const clearLetterRef = useRef(clearLetter);
+  clearLetterRef.current = clearLetter;
+  useShake(() => clearLetterRef.current('Shaken clear'), phase === 'writing');
+  useEffect(() => () => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    cancelLongPress();
+  }, []);
 
   useEffect(() => {
     onHasContentChange?.(hasContent);
@@ -1011,6 +1159,17 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
 
   return (
     <View ref={wrapRef} style={styles.wrap}>
+      {undo ? <UndoToast text={undo.label} onUndo={undoClear} /> : null}
+      {/* v3: the sheet slaps down (new recipient: old one slips out first), floats gently while
+          writing, wobbles on a tap, and crumples away on a long-press or shake. */}
+      <Reanimated.View
+        style={[
+          styles.paperArea,
+          sheetAnim.kind === 'swap' ? anim(fxNewSheet(sheetAnim.v), 0.75, 0, 'ease-out') : anim(fxSlapIn(sheetAnim.v), 0.45, 0, SPRING),
+        ]}>
+      <Reanimated.View style={[{ flex: 1 }, phase === 'writing' && !crumpling ? loop(fxFloat(), 4.5) : null]}>
+      <Reanimated.View style={[{ flex: 1 }, wiggle ? anim(fxWobble(wiggle % 2 ? 'A' : 'B'), 0.55, 0, 'ease-out') : null]}>
+      <Reanimated.View style={[{ flex: 1 }, crumpling ? anim(fxCrumple(), 0.75, 0, FX_OUT) : null]}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         {/* Clips everything below to the paper's own rounded rect — a defensive boundary, not
             just tidy: on load, the bottom-controls row (and friends) briefly render at a
@@ -1031,24 +1190,39 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             onContentChange={setContent}
             hasPhoto={mediaItems.length > 0}
             isNight={isNight}
+            recipientName={hideBadges ? 'Me' : recipientName}
+            wiggleKey={wiggle}
+            onFocusPaper={() => {
+              requestMotionPermission();
+              setWiggle((w) => w + 1);
+            }}
+            onPressInPaper={() => {
+              cancelLongPress();
+              longPressRef.current = setTimeout(() => clearLetterRef.current('Letter crumpled'), 650);
+            }}
+            onPressOutPaper={cancelLongPress}
           />
         </Animated.View>
+
+        {/* Weather on the paper, fold creases while folding, and the shutter flash. */}
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]}>
+          <PaperWeather condition={weatherCtx?.weather} isNight={isNight} />
+        </Animated.View>
+        <FoldCreases progress={progress} color={isNight ? 'rgba(255,255,255,.4)' : 'rgba(22,33,12,.35)'} />
+        <ShutterFlash k={flashKey} />
+        {mediaItems.length === 0 ? (
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]}>
+            <ToStamp label={hideBadges ? 'NOTE TO SELF' : `TO: ${recipientName.trim().split(/\s+/)[0].toUpperCase()}`} color={isNight ? '#9EB3FF' : '#2B4BFF'} />
+          </Animated.View>
+        ) : null}
 
         {/* Streak/leaderboard badges — moved here from a separate header chip so they read as
             part of the letter itself; fades with the same canvasOpacity as the writing surface
             so it's never left floating over the folded plane underneath. Hidden for a
             self-reminder (hideBadges), where neither means anything. */}
         {!hideBadges && (
-          <Animated.View style={[styles.paperBadges, { opacity: canvasOpacity }]} pointerEvents="none">
-            {streak > 0 && (
-              <View style={[styles.streakChip, isNight && styles.chipNight]} accessibilityLabel={`${streak} day throw streak with ${recipientName}`}>
-                <Text style={[styles.streakText, isNight && styles.streakTextNight]}>🔥{streak}</Text>
-              </View>
-            )}
-            <View style={[styles.pointsChip, isNight && styles.chipNight]} accessibilityLabel={`${points} leaderboard points with ${recipientName}`}>
-              <Icon path={POINTS_ICON} size={11} color={isNight ? throwNightColor.ink : throwColor.clayDeep} strokeWidth={2} />
-              <Text style={[styles.streakText, isNight && styles.streakTextNight]}>{points}</Text>
-            </View>
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'box-none' : 'none'}>
+            <StickerBadges streak={streak} points={points} recipientKey={recipientName} label={recipientName} />
           </Animated.View>
         )}
 
@@ -1060,7 +1234,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           <Animated.View style={[styles.photoStripWrap, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'box-none' : 'none'}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoStripContent}>
               {mediaItems.map((item, i) => (
-                <View key={`${item.uri}-${i}`} style={styles.photoThumbWrap}>
+                <Polaroid key={`${item.uri}-${i}`} index={i} label={item.isVideo ? 'video' : 'photo'} onRemove={() => setMediaItems((prev) => prev.filter((_, idx) => idx !== i))}>
                   <View style={styles.photoThumbFrame}>
                     {item.isVideo ? (
                       // No on-device video-frame decoding here — a plain dark tile with a play
@@ -1083,7 +1257,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
                   >
                     <Icon path={X_ICON} size={11} color={throwColor.paper} strokeWidth={2.6} />
                   </Pressable>
-                </View>
+                </Polaroid>
               ))}
             </ScrollView>
           </Animated.View>
@@ -1105,7 +1279,10 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
         >
         <Pressable
-          onPress={() => setPhotoSheetOpen(true)}
+          onPress={() => {
+            tick();
+            setPhotoSheetOpen(true);
+          }}
           disabled={disabled || phase === 'throwing'}
           accessibilityRole="button"
           accessibilityLabel="Add a photo"
@@ -1120,7 +1297,11 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         </Pressable>
 
         <Pressable
-          onPress={() => (voice.recording ? voice.stop() : voice.start())}
+          onPress={() => {
+            tick();
+            if (voice.recording) voice.stop();
+            else voice.start();
+          }}
           disabled={disabled || phase === 'throwing'}
           accessibilityRole="button"
           accessibilityLabel={voice.recording ? 'Stop recording' : 'Speak your letter'}
@@ -1128,6 +1309,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           {({ pressed }) =>
             voice.recording ? (
               <View style={[styles.micBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
+                <SoundBars size={roundBtnSize} level={voice.level} />
                 <View style={[styles.micBtn, roundBtnDynamicStyle, styles.micBtnActive]}>
                   <Icon path={STOP_ICON} size={22 * bottomRowScale} color="#FFFFFF" strokeWidth={1.8} />
                 </View>
@@ -1158,6 +1340,8 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             opt back out of short of abandoning the draft (see clearReminderDraft). */}
         <Pressable
           onPress={() => {
+            tick();
+            setBellSwing((n) => n + 1);
             if (selfReminderMode) {
               setReminderState('open');
               return;
@@ -1182,13 +1366,16 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
                 active={selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null}
                 style={[styles.roundBtn, roundBtnDynamicStyle]}
               >
-                <Icon
-                  path={BELL_ICON}
-                  size={25 * bottomRowScale}
-                  color={(selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null) ? '#FFFFFF' : STICKER_INK}
-                  strokeWidth={1.8}
-                />
+                <Reanimated.View style={bellSwing ? anim(fxSwing(bellSwing % 2 ? 'A' : 'B'), 0.9, 0, 'ease-out') : null}>
+                  <Icon
+                    path={BELL_ICON}
+                    size={25 * bottomRowScale}
+                    color={(selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null) ? '#FFFFFF' : STICKER_INK}
+                    strokeWidth={1.8}
+                  />
+                </Reanimated.View>
               </BottomIconSurface>
+              {ding ? <PopStamp key={'ding' + ding} text="DING!" style={{ top: -26, right: -22 }} /> : null}
             </View>
           )}
         </Pressable>
@@ -1229,13 +1416,38 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
                   <PaperPlane size={64} color={throwColor.clayDeep} />
                 </View>
               ) : (
-                <PaperPlaneStage ref={stageRef} onPhase={handleStagePhase} onError={handleStageError} />
+                <Reanimated.View style={[{ flex: 1 }, phase === 'ready' ? loop(fxPlaneWiggle(), 1.6) : null]}>
+                  <PaperPlaneStage ref={stageRef} onPhase={handleStagePhase} onError={handleStageError} />
+                </Reanimated.View>
               )}
             </Animated.View>
+            {phase === 'throwing' ? (
+              // Dashed trail left behind as the plane lifts off.
+              <Animated.View
+                style={[
+                  styles.trail,
+                  {
+                    opacity: liftOpacity,
+                    transform: [{ translateY: Animated.multiply(liftY, 0.5) }, { scaleY: liftY.interpolate({ inputRange: [-1000, 0], outputRange: [6, 0], extrapolate: 'clamp' }) }],
+                  },
+                ]}
+              />
+            ) : null}
           </Animated.View>
         )}
       </View>
+      </Reanimated.View>
+      </Reanimated.View>
+      </Reanimated.View>
+      </Reanimated.View>
 
+      {phase === 'ready' && hasContent && !((selfReminderMode || friendAlertSchedule !== null) && !reminderConfirmed) ? (
+        <Reanimated.View style={[{ alignSelf: 'center', marginTop: 8 }, loop(fxArrowBounce(), 0.9, 0, 'ease-in-out')]}>
+          <Svg width={22} height={22} viewBox="0 0 24 24">
+            <Path d="M12 19V5 M6 11l6-6 6 6" fill="none" stroke={isNight ? '#FFFFFF' : '#16210C'} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </Reanimated.View>
+      ) : null}
       {phase === 'ready' && (
         <Text style={[styles.readyHint, isNight && styles.readyHintNight]}>
           {!hasContent
@@ -1269,6 +1481,10 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           the sheet itself is otherwise identical either way. */}
       <BottomSheet visible={reminderState === 'open'} onClose={() => setReminderState('peek')}>
         <Text style={styles.scheduleModalTitle}>Reminder</Text>
+        {(() => {
+          const sch = selfReminderMode ? alertSchedule! : friendAlertSchedule ?? DEFAULT_FRIEND_ALERT_SCHEDULE;
+          return <ClockDial hour={sch.hour} minute={sch.minute} />;
+        })()}
         <AlertScheduleHeader
           schedule={selfReminderMode ? alertSchedule! : friendAlertSchedule ?? DEFAULT_FRIEND_ALERT_SCHEDULE}
           onChange={selfReminderMode ? onAlertScheduleChange! : setFriendAlertSchedule}
@@ -1281,6 +1497,9 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             // is actually confirmed, same as a self-reminder always could not.
             setReminderConfirmed(true);
             setReminderState('peek');
+            tick(true);
+            setDing((n) => n + 1);
+            setTimeout(() => setDing(0), 1900);
           }}
           accessibilityRole="button"
           accessibilityLabel="Done setting reminder"
@@ -1405,16 +1624,24 @@ const styles = StyleSheet.create({
     right: 14,
   },
   photoStripContent: { alignItems: 'center', gap: 10, paddingRight: 6 },
-  photoThumbWrap: { width: 72, height: 72 },
+  photoThumbWrap: { width: 70, height: 82, marginTop: 6 },
+  // Strip of tape holding each polaroid to the paper.
+  polaroidTape: { position: 'absolute', top: -7, alignSelf: 'center', width: 30, height: 12, backgroundColor: 'rgba(255,210,63,.75)', borderWidth: 1, borderColor: 'rgba(22,33,12,.15)' },
+  // Dashed trail the plane leaves as it lifts off.
+  trail: { position: 'absolute', alignSelf: 'center', left: '50%', marginLeft: -1, top: '45%', width: 0, height: 60, borderLeftWidth: 2.5, borderStyle: 'dashed', borderColor: 'rgba(22,33,12,.5)' },
+  // A polaroid: white frame with a deeper bottom edge, ink outline and hard shadow.
   photoThumbFrame: {
     width: '100%',
     height: '100%',
-    borderRadius: 8,
-    backgroundColor: throwColor.paper,
-    padding: 5,
-    ...throwColor.shadowSoft,
-  },
-  photoThumbImg: { width: '100%', height: '100%', borderRadius: 4 },
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+    padding: 4,
+    paddingBottom: 14,
+    borderWidth: 1.5,
+    borderColor: '#16210C',
+    boxShadow: '2px 2px 0 #16210C',
+  } as ViewStyle,
+  photoThumbImg: { width: '100%', height: '100%', borderRadius: 1 },
   videoThumbPlaceholder: {
     width: '100%',
     height: '100%',
