@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
-import { S, stickerCard, stickerPrimary } from './stickerStyle';
+import { S, stickerCard, stickerPrimary, GlassFill } from './stickerStyle';
 
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const CAMERA_ICON = 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z M12 17a4 4 0 100-8 4 4 0 000 8z';
@@ -33,6 +33,7 @@ export function ProfileCard({ name, avatarUrl, userId, city, friendCount, hasSta
   const subtitle = [city, `${friendCount} friend${friendCount === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
   return (
     <View style={styles.card}>
+      <GlassFill />
       <View style={styles.headerRow}>
         <FriendAvatar userId={userId} name={name} avatarUrl={avatarUrl} size={48} />
         <View style={styles.headerText}>

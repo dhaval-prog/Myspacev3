@@ -30,7 +30,7 @@ export function NotificationCircleButton({ onPress, unreadCount, selected, isNig
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'} hitSlop={8}>
       {({ pressed }) => (
         <View style={[styles.circle, selected && (isNight ? styles.circleSelectedNight : styles.circleSelected), pressed && styles.pressed]}>
-          <Icon path={BELL_ICON} size={24} color={S.ink} strokeWidth={2} />
+          <Icon path={BELL_ICON} size={24} color={selected ? '#FFFFFF' : S.ink} strokeWidth={2} />
           {unreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    // v3 sticker circle: white, ink outline, hard shadow; lime once it's the current selection.
+    // v3 sticker circle: white, ink outline, hard shadow; inverted (black) while selected.
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: S.ink,
@@ -56,8 +56,9 @@ const styles = StyleSheet.create({
     boxShadow: `3px 3px 0 ${S.ink}`,
   } as ViewStyle,
   pressed: { transform: [{ translateX: 2 }, { translateY: 2 }] },
-  circleSelected: { backgroundColor: S.lime },
-  circleSelectedNight: { backgroundColor: S.lime },
+  // Selected: colours invert — black fill, white icon and outline (the hard shadow stays dark).
+  circleSelected: { backgroundColor: S.ink, borderColor: '#FFFFFF' },
+  circleSelectedNight: { backgroundColor: S.ink, borderColor: '#FFFFFF' },
   badge: {
     position: 'absolute',
     right: -2,

@@ -1,22 +1,39 @@
 // v3 "sticker" look for Throw's panels and slot circles, matching the rest of the app
 // (Chats, Map, Pocket): cream cards with an ink outline and a hard offset shadow.
-import type { TextStyle, ViewStyle } from 'react-native';
+import { BlurView } from 'expo-blur';
+import React from 'react';
+import { StyleSheet, View, type TextStyle, type ViewStyle } from 'react-native';
 
 export const S = {
   ink: '#16210C',
   lime: '#C3EA4F',
   tomato: '#FF4F2E',
   paper: '#F4EFE3',
+  sky: '#9EB3FF',
+  blue: '#2B4BFF',
   faint: 'rgba(22,33,12,.55)',
 };
 
+const CARD_RADIUS = 26;
+
+/** Cream glass card: see-through cream over a blur, ink outline, hard shadow. Put <GlassFill /> first inside it. */
 export const stickerCard: ViewStyle = {
-  backgroundColor: S.paper,
+  backgroundColor: 'rgba(244,239,227,.58)',
   borderWidth: 2,
   borderColor: S.ink,
-  borderRadius: 26,
+  borderRadius: CARD_RADIUS,
   boxShadow: `4px 4px 0 ${S.ink}`,
 } as ViewStyle;
+
+/** The frosted layer behind a stickerCard's content (blurs whatever is underneath: map, weather). */
+export function GlassFill() {
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: CARD_RADIUS - 2, overflow: 'hidden' }]}>
+      <BlurView intensity={36} tint="light" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(250,246,236,.35)' }]} />
+    </View>
+  );
+}
 
 /** Dark pill with a lime offset — the main action (like the Chats screen's add button). */
 export const stickerPrimary: ViewStyle = {
