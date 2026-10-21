@@ -19,7 +19,6 @@ import Svg, { Path } from 'react-native-svg';
 import Reanimated from 'react-native-reanimated';
 import { anim, loop } from '@/theme/anim';
 import {
-  FoldCreases,
   fxArrowBounce,
   fxBackIn,
   fxFloat,
@@ -39,7 +38,7 @@ import {
   UndoToast,
   useShake,
 } from './letterFx';
-import { ballLandingTimes, CrumpleBall, CrumpleCreases, fxCrumplePaper, LiveMicRing, PaperWeather } from './letterFxReal';
+import { fxIntoShredder, fxTremble, HoldToShred, LiveMicRing, PaperWeather, SHRED_SECONDS, Shredder } from './letterFxReal';
 import { useThrowWeatherOptional } from '../../context/ThrowWeatherContext';
 import { INK_BLUE, LetterCanvas } from './LetterCanvas';
 import { PaperPlane } from './PaperPlane';
@@ -49,6 +48,7 @@ import type { PickedMedia } from './PhotoAttachSheet';
 import { StoryCaptureScreen } from './StoryCaptureScreen';
 import { StoryTrimScreen } from './StoryTrimScreen';
 import { BottomSheet } from '../expenses/BottomSheet';
+import { AutoplayVideoFill } from '../AutoplayVideoFill';
 import { AlertScheduleHeader } from './AlertScheduleHeader';
 import { GlassSurface } from '../friends/GlassSurface';
 import { Icon } from '../Icon';
@@ -60,8 +60,10 @@ import type { AlertSchedule, MediaTrim, StrokePath } from '../../types/throw';
 
 // Same cap the in-app capture screen itself enforces while recording — a library-picked video
 // over this needs the trim screen before it can be attached (see the trim-queue state below).
-/** Crumple timeline: the sheet scrunches up, then the paper ball bounces away. */
-const CRUMPLE_BALL_SECONDS = 1.9;
+/** How long the paper must be held before it goes into the shredder. */
+const HOLD_TO_SHRED_MS = 900;
+/** Hold-to-shred UI (pill + tremble) only shows after this, so a normal tap doesn't flash it. */
+const HOLD_HINT_DELAY_S = 0.22;
 const LETTER_MAX_VIDEO_MS = 15000;
 
 const PHOTO_ICON = 'M4 8h4l1.6-2.5h4.8L16 8h4v11H4z M12 11.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z';
@@ -441,8 +443,10 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
     setSheetAnim((a) => ({ kind: 'swap', v: a.v === 'A' ? 'B' : 'A' }));
   }, [recipientName]);
   const [wiggle, setWiggle] = useState(0);
-  const [crumpling, setCrumpling] = useState(false);
-  const [ballKey, setBallKey] = useState(0);
+  const [shredding, setShredding] = useState(false);
+  const [holding, setHolding] = useState(0);
+  const [shredKey, setShredKey] = useState(0);
+  const [paperRect, setPaperRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [undo, setUndo] = useState<{ text: string; media: PickedMedia[]; label: string } | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -544,29 +548,29 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   const cancelLongPress = () => {
     if (longPressRef.current) clearTimeout(longPressRef.current);
     longPressRef.current = null;
+    setHolding(0);
   };
-  /** Crumple (or shake) the letter away; Undo brings it back. */
+  /** Feed the letter through the shredder (long-press or shake); Undo brings it back. */
   const clearLetter = (label: string) => {
-    if (phase !== 'writing' || !hasContent || crumpling) return;
+    if (phase !== 'writing' || !hasContent || shredding) return;
     cancelLongPress();
     voice.recording && voice.stop();
     const snapshot = { text: letterCanvasRef.current?.getText() ?? '', media: mediaItems, label };
     tick(true);
-    setCrumpling(true);
-    // Paper crunches (a few small ticks), then the ball thuds on each bounce.
-    [120, 250].forEach((ms) => setTimeout(() => tick(), ms));
-    ballLandingTimes(CRUMPLE_BALL_SECONDS).forEach((sec, i) => setTimeout(() => tick(i === 0), sec * 1000));
-    setBallKey((k) => k + 1);
-    setTimeout(() => setBallKey(0), CRUMPLE_BALL_SECONDS * 1000 + 100);
+    setShredding(true);
+    setShredKey((k) => k + 1);
+    setTimeout(() => setShredKey(0), SHRED_SECONDS * 1000 + 1500);
+    // A buzzing rattle while the shredder runs.
+    for (let ms = 180; ms < SHRED_SECONDS * 1000 + 150; ms += 70) setTimeout(() => tick(), ms);
     setTimeout(() => {
       letterCanvasRef.current?.clearText();
       setMediaItems([]);
-      setCrumpling(false);
+      setShredding(false);
       setSheetAnim((a) => ({ kind: 'slap', v: a.v === 'A' ? 'B' : 'A' }));
       setUndo(snapshot);
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
       undoTimerRef.current = setTimeout(() => setUndo(null), 4500);
-    }, 750);
+    }, SHRED_SECONDS * 1000 + 250);
   };
   const undoClear = () => {
     if (!undo) return;
@@ -1167,11 +1171,17 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   return (
     <View ref={wrapRef} style={styles.wrap}>
       {undo ? <UndoToast text={undo.label} onUndo={undoClear} /> : null}
-      {ballKey ? <CrumpleBall key={ballKey} duration={CRUMPLE_BALL_SECONDS} ink={isNight ? '#9EB3FF' : INK_BLUE} /> : null}
+      {holding && !shredding ? <HoldToShred key={holding} seconds={HOLD_TO_SHRED_MS / 1000} delay={HOLD_HINT_DELAY_S} /> : null}
       {/* v3: the sheet slaps down (new recipient: old one slips out first), floats gently while
-          writing, wobbles on a tap, and crumples away on a long-press or shake. */}
+          writing, wobbles on a tap, trembles while held and goes through a shredder on a
+          long-press or shake. */}
       <Reanimated.View
+        onLayout={(e) => {
+          const { x, y, width, height } = e.nativeEvent.layout;
+          setPaperRect({ x, y, w: width, h: height });
+        }}
         style={[
+          shredding ? { overflow: 'hidden' } : null,
           styles.paperArea,
           sheetAnim.kind === 'swap'
             ? anim(fxNewSheet(sheetAnim.v), 0.75, 0, 'ease-out')
@@ -1179,9 +1189,13 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
               ? anim(fxBackIn(sheetAnim.v), 0.55, 0.12, SPRING)
               : anim(fxSlapIn(sheetAnim.v), 0.45, 0, SPRING),
         ]}>
-      <Reanimated.View style={[{ flex: 1 }, phase === 'writing' && !crumpling ? loop(fxFloat(), 4.5) : null]}>
-      <Reanimated.View style={[{ flex: 1 }, wiggle ? anim(fxWobble(wiggle % 2 ? 'A' : 'B'), 0.55, 0, 'ease-out') : null]}>
-      <Reanimated.View style={[{ flex: 1 }, crumpling ? anim(fxCrumplePaper(), 0.75, 0, 'linear') : null]}>
+      <Reanimated.View style={[{ flex: 1 }, phase === 'writing' && !shredding && !holding ? loop(fxFloat(), 4.5) : null]}>
+      <Reanimated.View
+        style={[
+          { flex: 1 },
+          holding && !shredding ? loop(fxTremble(), 0.09, HOLD_HINT_DELAY_S, 'linear') : wiggle ? anim(fxWobble(wiggle % 2 ? 'A' : 'B'), 0.55, 0, 'ease-out') : null,
+        ]}>
+      <Reanimated.View style={[{ flex: 1 }, shredding && paperRect ? anim(fxIntoShredder(Math.round(paperRect.h / 10) * 10), SHRED_SECONDS, 0.15, 'linear') : null]}>
       <View ref={paperAreaRef} style={styles.paperArea} onLayout={onPaperLayout} {...panResponder.panHandlers}>
         {/* Clips everything below to the paper's own rounded rect — a defensive boundary, not
             just tidy: on load, the bottom-controls row (and friends) briefly render at a
@@ -1210,7 +1224,9 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             }}
             onPressInPaper={() => {
               cancelLongPress();
-              longPressRef.current = setTimeout(() => clearLetterRef.current('Letter crumpled'), 650);
+              if (!latest.current.hasContent) return;
+              setHolding((k) => k + 1);
+              longPressRef.current = setTimeout(() => clearLetterRef.current('Letter shredded'), HOLD_TO_SHRED_MS);
             }}
             onPressOutPaper={cancelLongPress}
           />
@@ -1220,8 +1236,6 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]}>
           <PaperWeather condition={weatherCtx?.weather} intensity={weatherCtx?.intensity} reducedFlashing={weatherCtx?.reducedFlashing} isNight={isNight} />
         </Animated.View>
-        {crumpling ? <CrumpleCreases /> : null}
-        <FoldCreases progress={progress} color={isNight ? 'rgba(255,255,255,.4)' : 'rgba(22,33,12,.35)'} />
         <ShutterFlash k={flashKey} />
         {mediaItems.length === 0 ? (
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]}>
@@ -1250,15 +1264,17 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
                 <Polaroid key={`${item.uri}-${i}`} index={i} label={item.isVideo ? 'video' : 'photo'} onRemove={() => setMediaItems((prev) => prev.filter((_, idx) => idx !== i))}>
                   <View style={styles.photoThumbFrame}>
                     {item.isVideo ? (
-                      // No on-device video-frame decoding here — a plain dark tile with a play
-                      // glyph stands in for a preview frame, rather than a broken <Image>.
+                      // Plays inside the polaroid (muted, looping, within its trim window).
                       <View style={styles.videoThumbPlaceholder}>
-                        <Svg width={22} height={22} viewBox="0 0 24 24">
-                          <Path d={PLAY_ICON} fill={throwColor.paper} />
-                        </Svg>
+                        <AutoplayVideoFill uri={item.uri} muted trimStartMs={item.trim?.startMs} trimEndMs={item.trim?.endMs} />
+                        <View pointerEvents="none" style={styles.videoThumbBadge}>
+                          <Svg width={8} height={8} viewBox="0 0 24 24">
+                            <Path d={PLAY_ICON} fill={throwColor.paper} />
+                          </Svg>
+                        </View>
                       </View>
                     ) : (
-                      <Image source={{ uri: item.uri }} style={styles.photoThumbImg} />
+                      <Image source={{ uri: item.uri }} style={styles.photoThumbImg} resizeMode="cover" />
                     )}
                   </View>
                   <Pressable
@@ -1488,6 +1504,12 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         }}
       />
 
+      {shredKey && paperRect ? (
+        <View pointerEvents="none" style={{ position: 'absolute', left: paperRect.x, top: paperRect.y + 2, width: paperRect.w, zIndex: 40 }}>
+          <Shredder key={shredKey} width={paperRect.w} fall={paperRect.h + 140} ink={isNight ? '#9EB3FF' : INK_BLUE} />
+        </View>
+      ) : null}
+
       {/* Self mode threads its schedule through alertSchedule/onAlertScheduleChange (the caller
           owns that state, since it becomes a real throw_alerts row on throw); an ordinary letter
           to a friend uses its own local friendAlertSchedule instead (see its own doc comment) —
@@ -1633,13 +1655,15 @@ const styles = StyleSheet.create({
   // near the top of the paper, scrollable once there are more than fit. Spans most of the paper's
   // width rather than sitting in one corner, since there can be several now — LetterCanvas
   // reserves extra top padding (hasPhoto) as a guard against the writing area starting underneath.
+  // Inset by 10 and padded back out, so the tilted polaroids (corners, tape, hard shadow and the
+  // remove button) are never clipped by the scroll view's edges.
   photoStripWrap: {
     position: 'absolute',
-    top: 16,
-    left: 14,
-    right: 14,
+    top: 4,
+    left: 4,
+    right: 4,
   },
-  photoStripContent: { alignItems: 'center', gap: 10, paddingRight: 6 },
+  photoStripContent: { alignItems: 'center', gap: 14, padding: 10, paddingRight: 16 },
   photoThumbWrap: { width: 70, height: 82, marginTop: 6 },
   // Strip of tape holding each polaroid to the paper.
   polaroidTape: { position: 'absolute', top: -7, alignSelf: 'center', width: 30, height: 12, backgroundColor: 'rgba(255,210,63,.75)', borderWidth: 1, borderColor: 'rgba(22,33,12,.15)' },
@@ -1661,8 +1685,18 @@ const styles = StyleSheet.create({
   videoThumbPlaceholder: {
     width: '100%',
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 1,
     backgroundColor: throwColor.ink,
+    overflow: 'hidden',
+  },
+  videoThumbBadge: {
+    position: 'absolute',
+    left: 3,
+    bottom: 3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(22,33,12,.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },

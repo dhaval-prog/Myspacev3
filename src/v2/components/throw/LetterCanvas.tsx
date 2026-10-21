@@ -82,7 +82,7 @@ export const LetterCanvas = forwardRef<LetterCanvasHandle, LetterCanvasProps>(fu
   const penColor = isNight ? throwNightColor.ink : INK_BLUE;
   const typedTextRef = React.useRef('');
   typedTextRef.current = typedText;
-  const topPad = 66 + (hasPhoto ? 34 : 0) + (extraTopPadding ?? 0);
+  const topPad = 66 + (hasPhoto ? 42 : 0) + (extraTopPadding ?? 0);
 
   useImperativeHandle(
     ref,
