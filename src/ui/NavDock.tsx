@@ -1,5 +1,6 @@
 // The one bottom menu bar used on every tab (v3 screens and the v2 screens: Throw, games, wallet…):
-// dark pill with the five tabs + a round action button. Active tab = tilted lime sticker.
+// dark pill with the five tabs + a round action button. Active tab = tilted lime sticker
+// (white on Throw).
 // Same look and the same slide-up entrance everywhere.
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +35,8 @@ type Props = {
 };
 
 export function NavDock({ active, onSelect, onAdd, fabIcon, fabLabel, floating = true }: Props) {
+  // Throw uses white instead of lime for the active sticker and the round button's icon.
+  const accent = active === 'throw' ? '#FFFFFF' : C.lime;
   const insets = useSafeAreaInsets();
   return (
     <A
@@ -74,7 +77,7 @@ export function NavDock({ active, onSelect, onAdd, fabIcon, fabLabel, floating =
                     justifyContent: 'center',
                     gap: 4,
                     borderRadius: 999,
-                    backgroundColor: on ? C.lime : 'transparent',
+                    backgroundColor: on ? accent : 'transparent',
                     borderWidth: 1.5,
                     borderColor: on ? I : 'transparent',
                   },
@@ -94,7 +97,7 @@ export function NavDock({ active, onSelect, onAdd, fabIcon, fabLabel, floating =
         onPress={onAdd}
         pressed={{ transform: [{ scale: 0.94 }] }}
         style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: BAR, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon d={fabIcon ?? ICON.plusSm} size={24} color={C.lime} sw={2.2} />
+        <Icon d={fabIcon ?? ICON.plusSm} size={24} color={accent} sw={2.2} />
       </Press>
     </A>
   );

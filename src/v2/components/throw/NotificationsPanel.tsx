@@ -22,7 +22,6 @@ const ACCENT_BLUE = '#3D7BFF';
 type Filter = 'all' | 'status_posted' | 'friend_requests' | 'chat_message' | 'throw';
 
 const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'All' },
   { id: 'status_posted', label: 'Statuses' },
   { id: 'friend_requests', label: 'Requests' },
   { id: 'chat_message', label: 'Chats' },
@@ -75,7 +74,8 @@ interface NotificationsPanelProps {
 export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
   const { notifications, unreadCount, acknowledge, clearAll } = useNotifications();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest } = useFriends();
-  const [filter, setFilter] = useState<Filter>('all');
+  // Opens on Statuses (there's no "All" tab).
+  const [filter, setFilter] = useState<Filter>('status_posted');
 
   const avatarFor = (userId: string | null): { name: string; avatarUrl: string | null } | null => {
     if (!userId) return null;
