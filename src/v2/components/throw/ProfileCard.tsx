@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
+import { S, stickerCard, stickerPrimary } from './stickerStyle';
 
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const CAMERA_ICON = 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z M12 17a4 4 0 100-8 4 4 0 000 8z';
@@ -53,7 +54,7 @@ export function ProfileCard({ name, avatarUrl, userId, city, friendCount, hasSta
 
       <View style={styles.footerRow}>
         <Pressable onPress={onAddStatus} style={styles.addStatusBtn} accessibilityRole="button" accessibilityLabel="Add status">
-          <Icon path={CAMERA_ICON} size={15} color="#FFFFFF" strokeWidth={2} />
+          <Icon path={CAMERA_ICON} size={15} color={S.lime} strokeWidth={2.2} />
           <Text style={styles.addStatusLabel}>Add status</Text>
         </Pressable>
         <Pressable onPress={onOpenProfile} disabled={!onOpenProfile} accessibilityRole="button" accessibilityLabel="Profile">
@@ -66,30 +67,27 @@ export function ProfileCard({ name, avatarUrl, userId, city, friendCount, hasSta
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: throwColor.cardBg,
-    borderWidth: 1,
-    borderColor: throwColor.cardBorder,
-    borderRadius: throwRadius.card,
+    ...stickerCard,
     padding: 16,
     gap: 16,
-    ...throwColor.shadowSoft,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerText: { flex: 1, minWidth: 0, gap: 2 },
-  name: { fontFamily: throwFont.ui700, fontSize: 18, color: throwColor.ink },
-  subtitle: { fontFamily: throwFont.ui400, fontSize: 13, color: throwColor.inkFaint },
+  name: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 20, letterSpacing: -0.4, color: S.ink },
+  subtitle: { fontFamily: 'Figtree_500Medium', fontSize: 13, color: S.faint },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   statusSquare: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: throwColor.cardBorder,
+    borderWidth: 2,
+    borderColor: S.ink,
     borderStyle: 'dashed',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusCopy: { flex: 1, fontFamily: throwFont.ui400, fontSize: 13.5, color: throwColor.inkFaint, lineHeight: 18 },
+  statusCopy: { flex: 1, fontFamily: 'Figtree_500Medium', fontSize: 13.5, color: S.faint, lineHeight: 18 },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   addStatusBtn: {
     flexDirection: 'row',
@@ -98,8 +96,8 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 18,
     borderRadius: throwRadius.pill,
-    backgroundColor: throwColor.ink,
+    ...stickerPrimary,
   },
-  addStatusLabel: { fontFamily: throwFont.ui700, fontSize: 14, color: '#FFFFFF' },
-  profileLink: { fontFamily: throwFont.ui600, fontSize: 14, color: throwColor.ink },
+  addStatusLabel: { fontFamily: 'Figtree_800ExtraBold', fontSize: 14, color: '#FFFFFF' },
+  profileLink: { fontFamily: 'Figtree_700Bold', fontSize: 14, color: S.ink, textDecorationLine: 'underline' },
 });

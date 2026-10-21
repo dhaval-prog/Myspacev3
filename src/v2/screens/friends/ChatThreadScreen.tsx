@@ -25,6 +25,7 @@ import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMessageSendStatus } from '../../hooks/useMessageSendStatus';
 import { useSendPlaneFly } from '../../hooks/useSendPlaneFly';
+import { useThrowDetails } from '../../hooks/useThrowDetails';
 
 const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
 const BACK_ICON = 'M15 5l-7 7 7 7';
@@ -89,6 +90,8 @@ export function ChatThreadScreen() {
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const [letterDetail, setLetterDetail] = useState<DirectMessage | null>(null);
+  // Full text and photos for the Throw letters shown in this thread.
+  const letterDetails = useThrowDetails(messages.filter((x) => x.kind === 'letter').map((x) => x.throwId));
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
 
   const { statusFor } = useMessageSendStatus(messages, user?.id, reduceMotion);
@@ -265,6 +268,8 @@ export function ChatThreadScreen() {
                     toLabel={mine ? focusedFriend.name : 'You'}
                     timeLabel={timeLabel(m.createdAt)}
                     onBreakSeal={() => setLetterDetail(m)}
+                    body={m.throwId ? letterDetails[m.throwId]?.messageText : null}
+                    media={m.throwId ? letterDetails[m.throwId]?.media : undefined}
                   />
                 </AnimatedMessageWrap>
               );
@@ -447,7 +452,7 @@ export function ChatThreadScreen() {
             <Text style={styles.letterDetailKicker}>
               PAR AVION · FROM {(letterDetail.senderId === user?.id ? 'You' : focusedFriend.name).toUpperCase()}
             </Text>
-            <Text style={styles.letterDetailTitle}>{letterDetail.text}</Text>
+            <Text style={styles.letterDetailTitle}>{(letterDetail.throwId && letterDetails[letterDetail.throwId]?.messageText?.trim()) || letterDetail.text}</Text>
             {letterDetail.attachmentUrl && <Text style={styles.letterDetailPlace}>{letterDetail.attachmentUrl}</Text>}
             <Text style={styles.letterDetailTime}>Thrown {timeLabel(letterDetail.createdAt)}</Text>
             <ActionButton label="Close" variant="secondary" onPress={() => setLetterDetail(null)} />

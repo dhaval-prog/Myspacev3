@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { colors, fontFamily, radius, spacing } from '../../theme';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
@@ -7,6 +7,7 @@ import { useNotifications, type AppNotification } from '../../context/Notificati
 import { useFriends } from '../../context/FriendsContext';
 import { targetForNotification, type NotificationTarget } from '../../utils/notify';
 import { throwColor, throwRadius } from '../../theme/throwTokens';
+import { S, monoLabel, stickerCard, stickerPrimary } from './stickerStyle';
 
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const PLANE_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
@@ -216,15 +217,11 @@ export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    backgroundColor: throwColor.cardBg,
-    borderWidth: 1,
-    borderColor: throwColor.cardBorder,
-    borderRadius: throwRadius.card,
+    ...stickerCard,
     // A little more breathing room above the filter row than the header alone gave it (see item
     // 2's own explicit request) — starts the row a bit further down instead of flush against the
     // card's own top edge/rounded corner, whether or not "Mark all read" is showing above it.
     paddingTop: spacing.md,
-    ...throwColor.shadowSoft,
   },
   header: {
     flexDirection: 'row',
@@ -233,7 +230,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
   },
-  markAllRead: { fontFamily: fontFamily.sans600, fontSize: 13, color: ACCENT_BLUE },
+  markAllRead: { fontFamily: 'Figtree_700Bold', fontSize: 13, color: S.ink, textDecorationLine: 'underline' },
   // `width: '100%'` keeps this ScrollView from ever stretching past the card's own width (it
   // otherwise shrink-wraps to its unclipped content on web) — without it, a too-wide pill row
   // bleeds past the right edge instead of becoming properly horizontally scrollable there.
@@ -242,7 +239,7 @@ const styles = StyleSheet.create({
   // cross-axis height too short (a flexbox min-height/overflow-content quirk specific to that
   // engine, distinct from the WebKit pill-shrinking one noted on filterPill below), slicing the
   // tops off every pill in the row instead of showing them full-height.
-  filterScroll: { flexGrow: 0, width: '100%', height: 30, marginBottom: spacing.lg },
+  filterScroll: { flexGrow: 0, width: '100%', height: 38, marginBottom: spacing.md },
   // Extra bottom MARGIN (not padding) so the TODAY/EARLIER label below has real space before it —
   // kept off the ScrollView's own contentContainerStyle since that padding would otherwise just
   // extend the (now explicitly height-pinned) scrollable content past what's visible, rather than
@@ -250,9 +247,11 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
   filterPill: {
     paddingHorizontal: 12,
-    height: 30,
+    height: 32,
     borderRadius: radius.pill,
-    backgroundColor: colors.ink07,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(22,33,12,.16)',
     alignItems: 'center',
     justifyContent: 'center',
     // Without this, some WebKit builds shrink these pills below their own text's natural width
@@ -262,21 +261,17 @@ const styles = StyleSheet.create({
     // keeps every pill at its natural size no matter what.
     flexShrink: 0,
   },
-  filterPillActive: { backgroundColor: colors.ink },
-  filterLabel: { fontFamily: fontFamily.sans600, fontSize: 12.5, color: colors.textPrimary },
+  filterPillActive: { backgroundColor: S.ink, borderColor: S.ink, boxShadow: `2px 2px 0 ${S.lime}` } as ViewStyle,
+  filterLabel: { fontFamily: 'Figtree_600SemiBold', fontSize: 13, color: S.ink },
   filterLabelActive: { color: colors.white },
   sectionLabel: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    color: colors.textFaint,
-    textTransform: 'uppercase',
+    ...monoLabel,
     paddingHorizontal: spacing.lg,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
   listContent: { paddingBottom: spacing.lg },
-  empty: { fontFamily: fontFamily.sans400, fontSize: 13.5, color: colors.textFaint, textAlign: 'center', paddingVertical: spacing.xl },
+  empty: { fontFamily: 'Figtree_600SemiBold', fontSize: 14, color: S.faint, textAlign: 'center', paddingVertical: spacing.xl },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   avatarWrap: { position: 'relative' },
   badge: {
@@ -287,29 +282,31 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: colors.white,
+    borderColor: S.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rowBody: { flex: 1, minWidth: 0, gap: 2 },
   rowLine: { flexWrap: 'wrap' },
-  rowName: { fontFamily: fontFamily.sans700, fontSize: 14, color: colors.textPrimary },
-  rowPhrase: { fontFamily: fontFamily.sans400, fontSize: 14, color: colors.textPrimary },
+  rowName: { fontFamily: 'Figtree_700Bold', fontSize: 14, color: S.ink },
+  rowPhrase: { fontFamily: 'Figtree_400Regular', fontSize: 14, color: S.ink },
   rowPreview: { fontFamily: fontFamily.sans400, fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   rowTime: { fontFamily: fontFamily.sans400, fontSize: 12, color: colors.textFaint, marginTop: 2 },
   actionsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
-  acceptButton: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingVertical: 7, paddingHorizontal: 16 },
-  acceptLabel: { fontFamily: fontFamily.sans700, fontSize: 13, color: colors.white },
+  acceptButton: { ...stickerPrimary, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 16 },
+  acceptLabel: { fontFamily: 'Figtree_700Bold', fontSize: 13, color: '#FFFFFF' },
   declineButton: { paddingVertical: 7, paddingHorizontal: 4 },
   declineLabel: { fontFamily: fontFamily.sans600, fontSize: 13, color: colors.textSecondary },
   photoThumb: {
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: colors.ink07,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: S.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   photoThumbLabel: { fontFamily: fontFamily.sans400, fontSize: 9, color: colors.textFaint, marginTop: 2 },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: ACCENT_BLUE, marginTop: 6 },
+  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: S.tomato, borderWidth: 1.5, borderColor: S.ink, marginTop: 6 },
 });

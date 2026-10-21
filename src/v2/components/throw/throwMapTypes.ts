@@ -5,6 +5,9 @@ export interface ThrowMapPin {
   latitude: number;
   longitude: number;
   label: string;
+  /** Their photo and full name, for the sticker pin's avatar (initials). */
+  avatarUrl?: string | null;
+  fullName?: string;
   isSelf?: boolean;
   /** The currently-selected recipient — emphasized with a glowing ring. */
   selected?: boolean;

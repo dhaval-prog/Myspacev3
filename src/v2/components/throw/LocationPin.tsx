@@ -1,39 +1,62 @@
+// Throw map pin — the same sticker pin as the Map screen: a teardrop with the person's avatar
+// (their photo or chosen colour + initials), ink outline and hard shadow, with a small name tag.
+// The teardrop's tip sits exactly on the location.
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { throwColor, throwFont } from '../../theme/throwTokens';
+import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+
+import { Person } from '@/ui/Person';
+
+const INK = '#16210C';
+const LIME = '#C3EA4F';
+/** Teardrop size (the rotated square's side), regular and selected. */
+export const PIN_SIZE = 40;
+export const PIN_SIZE_SELECTED = 50;
+/** Distance from the top of the glyph to the teardrop's tip: half the side plus half the diagonal. */
+export const pinTipOffset = (size: number) => size * 1.207;
 
 interface LocationPinGlyphProps {
   label: string;
+  /** The person's id and photo, for their avatar. */
+  userId?: string;
+  avatarUrl?: string | null;
+  /** Full name for the avatar's initials (the tag shows `label`). */
+  fullName?: string;
   isSelf?: boolean;
-  /** The currently-selected recipient — emphasized with a glowing ring. */
+  /** The currently-selected recipient — bigger, with a lime ring. */
   selected?: boolean;
   /** A friend who isn't the current selection — faded so the selected one reads clearly. */
   dimmed?: boolean;
-  /** Swaps the selected pin's clay/brown glow-and-ring for a white glow instead, matching the
-   * map's own night basemap/style (see ThrowMap's isDay) — same signal as FoldingLetter's own
-   * isNight, not a whole-app dark mode. Only the *selected* pin's emphasis colour changes; the
-   * base dot/ring colours are untouched. */
+  /** Night map (unused: the sticker pin reads on both basemaps). */
   isNight?: boolean;
 }
 
-/** The pin's visual (ring/dot/label) with no positioning of its own — used directly as a native
- * map Marker's child (the Marker itself owns lat/lng-driven placement) and internally by
- * `LocationPin` below (for the web map's DOM-overlay pins, positioned by pixel x/y). */
-export function LocationPinGlyph({ label, isSelf, selected, dimmed, isNight }: LocationPinGlyphProps) {
+/** The pin's visual with no positioning of its own — a native map Marker's child, and inside `LocationPin` on web. */
+export function LocationPinGlyph({ label, userId, avatarUrl, fullName, isSelf, selected, dimmed }: LocationPinGlyphProps) {
+  const size = selected ? PIN_SIZE_SELECTED : PIN_SIZE;
+  const inner = size - 10;
   return (
     <View style={[styles.stack, dimmed && styles.dimmed]}>
-      {selected && <View style={[styles.glow, isNight && styles.glowNight]} />}
-      <View style={[styles.ring, isSelf && styles.ringSelf, selected && (isNight ? styles.ringSelectedNight : styles.ringSelected)]} />
       <View
         style={[
-          styles.dot,
-          isSelf ? styles.dotSelf : styles.dotFriend,
-          selected && styles.dotSelected,
-        ]}
-      />
-      <Text style={[styles.label, isSelf && styles.labelSelf, selected && styles.labelSelected]} numberOfLines={1}>
-        {isSelf ? 'You' : label}
-      </Text>
+          styles.drop,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderBottomLeftRadius: 4,
+            backgroundColor: isSelf ? LIME : '#FFFFFF',
+            boxShadow: selected ? `4px 4px 0 ${INK}` : `2px 2px 0 ${INK}`,
+          } as ViewStyle,
+        ]}>
+        <View style={{ width: inner, height: inner, borderRadius: inner / 2, overflow: 'hidden', transform: [{ rotate: '45deg' }] }}>
+          <Person id={userId ?? label} name={fullName || label} avatarUrl={avatarUrl} size={inner} font={Math.round(inner * 0.36)} ink={INK} />
+        </View>
+      </View>
+      <View style={[styles.tag, { marginTop: Math.round(size * 0.21) + 3 }, isSelf && styles.tagSelf, selected && styles.tagSelected]}>
+        <Text style={[styles.tagText, (isSelf || selected) && styles.tagTextOn]} numberOfLines={1}>
+          {isSelf ? 'YOU' : label.toUpperCase()}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -44,15 +67,14 @@ interface LocationPinProps extends LocationPinGlyphProps {
   onPress?: () => void;
 }
 
-/** A pin absolutely positioned over the web map by pixel x/y (from Leaflet's own projection) —
- * own location vs. a friend's read differently. */
-export function LocationPin({ x, y, label, isSelf, onPress, selected, dimmed, isNight }: LocationPinProps) {
-  const content = <LocationPinGlyph label={label} isSelf={isSelf} selected={selected} dimmed={dimmed} isNight={isNight} />;
-
+/** A pin absolutely positioned over the web map by pixel x/y, its tip on the point. */
+export function LocationPin({ x, y, onPress, ...glyph }: LocationPinProps) {
+  const size = glyph.selected ? PIN_SIZE_SELECTED : PIN_SIZE;
+  const content = <LocationPinGlyph {...glyph} />;
   return (
-    <View style={[styles.wrap, { left: x - 34, top: y - 14 }]} pointerEvents={onPress ? 'box-none' : 'none'}>
+    <View style={[styles.wrap, { left: x - 45, top: y - pinTipOffset(size), zIndex: glyph.selected ? 2 : 1 }]} pointerEvents={onPress ? 'box-none' : 'none'}>
       {onPress ? (
-        <Pressable onPress={onPress} hitSlop={10}>
+        <Pressable onPress={onPress} hitSlop={8}>
           {content}
         </Pressable>
       ) : (
@@ -63,46 +85,13 @@ export function LocationPin({ x, y, label, isSelf, onPress, selected, dimmed, is
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', width: 68, alignItems: 'center' },
+  wrap: { position: 'absolute', width: 90, alignItems: 'center' },
   stack: { alignItems: 'center' },
-  dimmed: { opacity: 0.38 },
-  glow: {
-    position: 'absolute',
-    top: -11,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    // Blue-tinted (the same cool blue as throwColor.activeBlue, the carousel's own "selected"
-    // colour) — was clay/orange, then ink, per two rounds of explicit requests; now a glowing
-    // blue to read as clearly "active" against the rest of Throw's warm palette.
-    backgroundColor: 'rgba(61,123,255,.32)',
-  },
-  // Night skin — a white glow instead of the day skin's ink one, matching the map's own dark
-  // night basemap.
-  glowNight: { backgroundColor: 'rgba(255,255,255,.28)' },
-  ring: { position: 'absolute', top: -3, width: 20, height: 20, borderRadius: 10, backgroundColor: throwColor.pinRing },
-  ringSelf: { backgroundColor: 'rgba(43,35,28,.14)' },
-  ringSelected: { backgroundColor: 'rgba(61,123,255,.5)' },
-  ringSelectedNight: { backgroundColor: 'rgba(255,255,255,.45)' },
-  dot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: throwColor.paper },
-  dotSelf: { backgroundColor: throwColor.pinSelf },
-  dotFriend: { backgroundColor: throwColor.pinFriend },
-  // The active/selected pin's own dot — always the same blue as its ring/glow, day or night
-  // (per explicit request), overriding whichever base clay/ink color dotSelf/dotFriend set above.
-  dotSelected: { width: 14, height: 14, borderRadius: 7, backgroundColor: throwColor.activeBlue },
-  label: {
-    marginTop: 4,
-    fontFamily: throwFont.ui600,
-    fontSize: 10.5,
-    color: throwColor.ink,
-    backgroundColor: 'rgba(251,246,236,.88)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  labelSelf: { color: throwColor.clayDeep, fontFamily: throwFont.ui700 },
-  // Same blue as the selected dot/ring — overrides labelSelf's clay color when both apply (array
-  // order below puts this last), per explicit request.
-  labelSelected: { color: throwColor.activeBlue, fontFamily: throwFont.ui700 },
+  dimmed: { opacity: 0.55 },
+  drop: { transform: [{ rotate: '-45deg' }], borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center' },
+  tag: { backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: INK, borderRadius: 6, paddingVertical: 1, paddingHorizontal: 6, maxWidth: 90 },
+  tagSelf: { backgroundColor: INK },
+  tagSelected: { backgroundColor: INK },
+  tagText: { fontFamily: 'SpaceMono_700Bold', fontSize: 9.5, letterSpacing: 0.6, color: INK },
+  tagTextOn: { color: LIME },
 });

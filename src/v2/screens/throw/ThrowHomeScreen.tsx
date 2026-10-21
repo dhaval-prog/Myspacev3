@@ -761,6 +761,8 @@ export function ThrowHomeScreen({
         latitude: f.location!.latitude,
         longitude: f.location!.longitude,
         label: isSelf ? 'You' : f.name.split(' ')[0],
+        avatarUrl: f.avatarUrl,
+        fullName: f.name,
         isSelf,
         selected,
         dimmed: !selected && friendsWithLocation.length > 1,

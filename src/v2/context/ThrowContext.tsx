@@ -405,7 +405,7 @@ export function ThrowProvider({ children }: { children: React.ReactNode }) {
         const title = draft.messageText?.trim().slice(0, 60) || 'A letter';
         const { error: msgErr } = await supabase
           .from('direct_messages')
-          .insert({ connection_id: connectionId, sender_id: myId, kind: 'letter', text: title, attachment_url: throwRow.sender_city || null });
+          .insert({ connection_id: connectionId, sender_id: myId, kind: 'letter', text: title, attachment_url: throwRow.sender_city || null, throw_id: throwRow.id });
         warn('post throw chat message', msgErr);
       }
       await refresh();

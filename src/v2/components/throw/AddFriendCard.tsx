@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
@@ -11,6 +11,7 @@ import {
   type NearbySuggestion,
   type ProfileSearchResult,
 } from '../../utils/addFriendSuggestions';
+import { S, monoLabel, stickerCard, stickerField, stickerSecondary } from './stickerStyle';
 
 const SEARCH_ICON = 'M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.35-4.35';
 const LINK_ICON = 'M9 17H7a5 5 0 010-10h2 M15 7h2a5 5 0 010 10h-2 M8 12h8';
@@ -165,7 +166,7 @@ export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
       </View>
 
       <Pressable onPress={onOpenAddFriendScreen} style={styles.shareBtn} accessibilityRole="button" accessibilityLabel="Share invite link">
-        <Icon path={LINK_ICON} size={16} color="#FFFFFF" strokeWidth={2} />
+        <Icon path={LINK_ICON} size={16} color={S.ink} strokeWidth={2.2} />
         <Text style={styles.shareLabel}>Share invite link</Text>
       </Pressable>
     </View>
@@ -174,37 +175,34 @@ export function AddFriendCard({ onOpenAddFriendScreen }: AddFriendCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: throwColor.cardBg,
-    borderWidth: 1,
-    borderColor: throwColor.cardBorder,
-    borderRadius: throwRadius.card,
+    ...stickerCard,
     padding: 16,
     gap: 12,
-    ...throwColor.shadowSoft,
   },
-  title: { fontFamily: throwFont.ui700, fontSize: 17, color: throwColor.ink },
+  title: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 19, letterSpacing: -0.4, color: S.ink },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     height: 42,
     paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: throwColor.screenBg,
-  },
+    borderRadius: 999,
+    ...stickerField,
+    boxShadow: `2px 2px 0 ${S.ink}`,
+  } as ViewStyle,
   searchInput: { flex: 1, fontFamily: throwFont.ui400, fontSize: 14, color: throwColor.ink },
-  sectionLabel: { fontFamily: throwFont.ui600, fontSize: 11, letterSpacing: 1, color: throwColor.inkFaint, textTransform: 'uppercase' },
+  sectionLabel: monoLabel,
   list: { gap: 2, minHeight: 40 },
   loading: { paddingVertical: 12 },
-  empty: { fontFamily: throwFont.ui400, fontSize: 13, color: throwColor.inkFaint, paddingVertical: 10 },
+  empty: { fontFamily: 'Figtree_500Medium', fontSize: 13, color: S.faint, paddingVertical: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   rowBody: { flex: 1, minWidth: 0, gap: 1 },
-  rowName: { fontFamily: throwFont.ui700, fontSize: 14.5, color: throwColor.ink },
+  rowName: { fontFamily: 'Figtree_700Bold', fontSize: 14.5, color: S.ink },
   rowMeta: { fontFamily: throwFont.ui400, fontSize: 12.5, color: throwColor.inkFaint },
-  addBtn: { height: 32, paddingHorizontal: 16, borderRadius: throwRadius.pill, backgroundColor: throwColor.ink, alignItems: 'center', justifyContent: 'center' },
-  addBtnDisabled: { backgroundColor: throwColor.screenBg },
-  addBtnLabel: { fontFamily: throwFont.ui700, fontSize: 13, color: '#FFFFFF' },
-  addBtnLabelDisabled: { color: throwColor.inkFaint },
+  addBtn: { height: 32, paddingHorizontal: 16, borderRadius: throwRadius.pill, ...stickerSecondary, alignItems: 'center', justifyContent: 'center' },
+  addBtnDisabled: { backgroundColor: '#FFFFFF', boxShadow: 'none' } as ViewStyle,
+  addBtnLabel: { fontFamily: 'Figtree_800ExtraBold', fontSize: 13, color: S.ink },
+  addBtnLabelDisabled: { color: S.faint },
   shareBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -212,7 +210,7 @@ const styles = StyleSheet.create({
     gap: 8,
     height: 44,
     borderRadius: throwRadius.pill,
-    backgroundColor: throwColor.ink,
+    ...stickerSecondary,
   },
-  shareLabel: { fontFamily: throwFont.ui700, fontSize: 14, color: '#FFFFFF' },
+  shareLabel: { fontFamily: 'Figtree_800ExtraBold', fontSize: 14, color: S.ink },
 });
