@@ -5,7 +5,7 @@ import { throwColor } from '../../theme/throwTokens';
 import { throwMapNightGoogleStyle } from '../../theme/throwMapNativeStyle';
 import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { latLngAtProgress, planeOpacityForProgress, planeSizeForProgress } from '../../utils/mapProjection';
-import { LocationPinGlyph } from './LocationPin';
+import { LocationPinGlyph, PIN_SIZE, PIN_SIZE_SELECTED, pinTipOffset } from './LocationPin';
 import { PaperPlane } from './PaperPlane';
 import type { ThrowMapProps } from './throwMapTypes';
 
@@ -145,13 +145,12 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
           onPress={pin.onPress}
           zIndex={pin.selected ? 2 : 1}
           tracksViewChanges={true}
-          // LocationPinGlyph's dot (the actual point) sits near the top of its own box, above
-          // the label — anchor the marker there instead of react-native-maps' bottom-center
-          // default, which would put the geo-coordinate down at the label's baseline.
-          anchor={{ x: 0.5, y: 0.18 }}
+          // The teardrop's tip is the location: its offset from the top over the glyph's height
+          // (teardrop + spacing + ~18px name tag).
+          anchor={{ x: 0.5, y: pinTipOffset(pin.selected ? PIN_SIZE_SELECTED : PIN_SIZE) / ((pin.selected ? PIN_SIZE_SELECTED : PIN_SIZE) * 1.21 + 21) }}
         >
           <View style={styles.pinWrap}>
-            <LocationPinGlyph label={pin.label} isSelf={pin.isSelf} selected={pin.selected} dimmed={pin.dimmed} isNight={!isDay} />
+            <LocationPinGlyph label={pin.label} userId={pin.id} avatarUrl={pin.avatarUrl} fullName={pin.fullName} isSelf={pin.isSelf} selected={pin.selected} dimmed={pin.dimmed} isNight={!isDay} />
           </View>
         </Marker>
       ))}

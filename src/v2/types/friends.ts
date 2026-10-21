@@ -44,5 +44,7 @@ export interface DirectMessage {
   /** Public storage URL for 'image', a Google Maps link for 'location', the sender's city as a
    * place tag for 'letter'; null for 'text'. */
   attachmentUrl: string | null;
+  /** For 'letter': the Throw letter it announces (its full text and photos load from there). */
+  throwId?: string | null;
   createdAt: string;
 }

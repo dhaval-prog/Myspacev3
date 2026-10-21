@@ -25,6 +25,7 @@ interface MessageRow {
   kind: 'text' | 'image' | 'location' | 'system' | 'letter';
   text: string | null;
   attachment_url: string | null;
+  throw_id?: string | null;
   created_at: string;
 }
 
@@ -190,6 +191,7 @@ function toDirectMessage(row: MessageRow): DirectMessage {
     kind: row.kind,
     text: row.text ?? '',
     attachmentUrl: row.attachment_url,
+    throwId: row.throw_id ?? null,
     createdAt: row.created_at,
   };
 }

@@ -1,5 +1,6 @@
+import { Image } from 'expo-image';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 import { fontFamily } from '../../theme';
 
@@ -39,8 +40,14 @@ export function LetterThrownCard({
   toLabel,
   timeLabel,
   onBreakSeal,
+  body,
+  media,
 }: {
   title: string;
+  /** The letter's full text (replaces the short title when loaded). */
+  body?: string | null;
+  /** Photos/videos thrown with the letter. */
+  media?: string[];
   place: string | null;
   /** The "TO ..." line's destination — a group's name, or a friend's name in a 1:1 thread. */
   toLabel: string;
@@ -54,8 +61,8 @@ export function LetterThrownCard({
         <View style={styles.topRow}>
           <View style={styles.topText}>
             <Text style={styles.kicker}>PAR AVION · TO {toLabel.toUpperCase()}</Text>
-            <Text style={styles.title} numberOfLines={2}>
-              {title}
+            <Text style={styles.title} numberOfLines={body ? undefined : 2}>
+              {body?.trim() || title}
             </Text>
           </View>
           {place ? (
@@ -66,6 +73,7 @@ export function LetterThrownCard({
             </View>
           ) : null}
         </View>
+        {media?.length ? <LetterMedia urls={media} /> : null}
         <View style={styles.bottomRow}>
           <Text style={styles.time}>{timeLabel}</Text>
           <Pressable onPress={onBreakSeal} style={styles.breakSeal} accessibilityRole="button" accessibilityLabel="Break seal">
@@ -78,7 +86,45 @@ export function LetterThrownCard({
   );
 }
 
+const isVideo = (url: string) => /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
+
+/** The letter's photos (and videos) — one large, or a two-up grid when there are several. */
+function LetterMedia({ urls }: { urls: string[] }) {
+  const one = urls.length === 1;
+  return (
+    <View style={styles.mediaGrid}>
+      {urls.slice(0, 4).map((url, i) => {
+        const more = i === 3 && urls.length > 4 ? urls.length - 4 : 0;
+        return (
+          <Pressable key={url + i} onPress={() => Linking.openURL(url)} accessibilityRole="imagebutton" accessibilityLabel={isVideo(url) ? 'Open video' : 'Open photo'} style={[styles.mediaTile, one ? styles.mediaOne : styles.mediaHalf]}>
+            {isVideo(url) ? (
+              <View style={styles.videoTile}>
+                <Text style={styles.videoGlyph}>▶</Text>
+              </View>
+            ) : (
+              <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+            )}
+            {more ? (
+              <View style={styles.moreTile}>
+                <Text style={styles.moreText}>+{more}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  mediaTile: { borderRadius: 10, overflow: 'hidden', backgroundColor: '#E6DFD0', borderWidth: 1.5, borderColor: '#16210C' },
+  mediaOne: { width: '100%', aspectRatio: 4 / 3 },
+  mediaHalf: { width: '48%', aspectRatio: 1 },
+  videoTile: { flex: 1, backgroundColor: '#16210C', alignItems: 'center', justifyContent: 'center' },
+  videoGlyph: { color: '#C3EA4F', fontSize: 22 },
+  moreTile: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(22,33,12,.55)', alignItems: 'center', justifyContent: 'center' },
+  moreText: { color: '#fff', fontFamily: 'SpaceMono_700Bold', fontSize: 16 },
   stripeSvg: {
     position: 'absolute',
     top: 0,

@@ -1,7 +1,8 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import { Icon } from '../Icon';
 import { throwColor, throwNightColor } from '../../theme/throwTokens';
+import { S } from './stickerStyle';
 
 // Matches RecipientCarousel's own AVATAR_SIZE (64) so this slot's circle reads as the same
 // diameter as every real contact's avatar, not a visibly smaller stand-in beside them.
@@ -31,7 +32,7 @@ export function AddStoryButton({ onPress, selected, isNight }: AddStoryButtonPro
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Add to your story" hitSlop={8}>
       {({ pressed }) => (
         <View style={[styles.circle, selected && (isNight ? styles.circleSelectedNight : styles.circleSelected), pressed && styles.pressed]}>
-          <Icon path={PERSON_ICON} size={26} color="rgba(255,255,255,.75)" strokeWidth={1.8} />
+          <Icon path={PERSON_ICON} size={26} color={S.ink} strokeWidth={2} />
           <View style={styles.badge}>
             <Icon path={PLUS_ICON} size={12} color={throwColor.ink} strokeWidth={2.4} />
           </View>
@@ -46,14 +47,17 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    backgroundColor: throwColor.ink,
+    // v3 sticker circle: white, ink outline, hard shadow; lime once it's the current selection.
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: S.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    ...throwColor.shadowSoft,
-  },
-  pressed: { opacity: 0.85 },
-  circleSelected: { borderWidth: 2, borderColor: throwColor.inkFaint },
-  circleSelectedNight: { borderWidth: 2, borderColor: throwNightColor.ink },
+    boxShadow: `3px 3px 0 ${S.ink}`,
+  } as ViewStyle,
+  pressed: { transform: [{ translateX: 2 }, { translateY: 2 }] },
+  circleSelected: { backgroundColor: S.lime },
+  circleSelectedNight: { backgroundColor: S.lime },
   badge: {
     position: 'absolute',
     right: -2,
@@ -61,9 +65,9 @@ const styles = StyleSheet.create({
     width: BADGE_SIZE,
     height: BADGE_SIZE,
     borderRadius: BADGE_SIZE / 2,
-    backgroundColor: throwColor.storyRing,
+    backgroundColor: S.lime,
     borderWidth: 2,
-    borderColor: throwColor.paper,
+    borderColor: S.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
