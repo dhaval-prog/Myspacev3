@@ -223,9 +223,9 @@ export function InkPrompt({ name, color, style, wiggleKey, centered }: { name: s
 }
 
 /** "TO: PRIYA" rubber stamp in the paper's corner; restamps when the recipient changes. */
-export function ToStamp({ label, color = COBALT }: { label: string; color?: string }) {
+export function ToStamp({ label, color = COBALT, background }: { label: string; color?: string; background?: string }) {
   return (
-    <A key={label} pointerEvents="none" style={[styles.toStamp, { borderColor: color }, anim(fxStamp(), 0.4, 0.25, SPRING)]}>
+    <A key={label} pointerEvents="none" style={[styles.toStamp, { borderColor: color }, background ? { backgroundColor: background } : null, anim(fxStamp(), 0.4, 0.25, SPRING)]}>
       <Text style={[styles.toStampText, { color }]} numberOfLines={1}>
         {label}
       </Text>

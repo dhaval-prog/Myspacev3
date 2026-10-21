@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AutoplayVideoFill } from '../AutoplayVideoFill';
 import { Icon } from '../Icon';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
@@ -18,6 +19,9 @@ interface ProfileCardProps {
    * plain "posted" read instead of inviting a second one; the card itself doesn't manage story
    * data, so this is simply handed in by whatever already tracks it. */
   hasStatusToday?: boolean;
+  /** Your latest status today, shown in the square (tap to watch it). */
+  status?: { uri: string; isVideo: boolean; trimStartMs?: number | null; trimEndMs?: number | null } | null;
+  onViewStatus?: () => void;
   onAddStatus: () => void;
   /** The "Profile" text link — left inert (no screen to open yet) rather than guessing at one. */
   onOpenProfile?: () => void;
@@ -29,7 +33,7 @@ interface ProfileCardProps {
  * AddFriendCard) in the same step; both disappear together the moment the camera opens, and both
  * come back once it closes. No explicit close button — flicking the carousel to a real contact
  * (or Notifications) is the way out, same as every other carousel-driven step. */
-export function ProfileCard({ name, avatarUrl, userId, city, friendCount, hasStatusToday, onAddStatus, onOpenProfile }: ProfileCardProps) {
+export function ProfileCard({ name, avatarUrl, userId, city, friendCount, hasStatusToday, status, onViewStatus, onAddStatus, onOpenProfile }: ProfileCardProps) {
   const subtitle = [city, `${friendCount} friend${friendCount === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
   return (
     <View style={styles.card}>
@@ -43,9 +47,19 @@ export function ProfileCard({ name, avatarUrl, userId, city, friendCount, hasSta
       </View>
 
       <View style={styles.statusRow}>
-        <View style={styles.statusSquare}>
-          <Icon path={PLUS_ICON} size={18} color={throwColor.inkFaint} strokeWidth={2} />
-        </View>
+        {status ? (
+          <Pressable onPress={onViewStatus} style={[styles.statusSquare, styles.statusThumb]} accessibilityRole="button" accessibilityLabel="View your status">
+            {status.isVideo ? (
+              <AutoplayVideoFill uri={status.uri} muted trimStartMs={status.trimStartMs ?? undefined} trimEndMs={status.trimEndMs ?? undefined} />
+            ) : (
+              <Image source={{ uri: status.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            )}
+          </Pressable>
+        ) : (
+          <Pressable onPress={onAddStatus} style={styles.statusSquare} accessibilityRole="button" accessibilityLabel="Add status">
+            <Icon path={PLUS_ICON} size={18} color={throwColor.inkFaint} strokeWidth={2} />
+          </Pressable>
+        )}
         <Text style={styles.statusCopy}>
           {hasStatusToday
             ? 'Status posted today. Friends on the map see it for 24 hours.'
@@ -88,6 +102,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  statusThumb: { borderStyle: 'solid', overflow: 'hidden', backgroundColor: S.ink },
   statusCopy: { flex: 1, fontFamily: 'Figtree_500Medium', fontSize: 13.5, color: S.faint, lineHeight: 18 },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   addStatusBtn: {

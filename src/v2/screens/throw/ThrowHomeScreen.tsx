@@ -522,6 +522,8 @@ export function ThrowHomeScreen({
   const isPreviewMode = storyFlow?.name === 'preview';
   // The Profile + Add Friend cards popover — see StoryFlow's own comment on 'cards'.
   const isCardsMode = storyFlow?.name === 'cards';
+  const myStories = myId ? storiesByUser[myId] : undefined;
+  const myLatestStory = myStories && myStories.length > 0 ? myStories[myStories.length - 1] : null;
   // Whether the virtual "Status" slot itself (not a real friend) is the current selection — the
   // status contact's own cards/camera (see its own render below) are scoped to this, same
   // condition RecipientCarousel's own isAddStorySelected prop already uses.
@@ -740,7 +742,7 @@ export function ThrowHomeScreen({
   // not just the carousel or the letter card — same contact-drag machinery as everywhere else
   // (see useContactFlickGesture's own doc comment), just gated to whichever of these two surfaces
   // is actually showing.
-  const cardsFlick = useContactFlickGesture<ComponentRef<typeof ScrollView>>(isCardsMode, {
+  const cardsFlick = useContactFlickGesture<ComponentRef<typeof View>>(isCardsMode, {
     onContactDragStart: handleContactDragStart,
     onContactDragOffset: handleContactDragOffset,
     onContactDragEnd: handleContactDragEnd,
@@ -993,7 +995,9 @@ export function ThrowHomeScreen({
             takes over this exact slot instead (see isCardsMode's own use in letterCard's render
             condition below) so the two steps never show at once. */}
         {!inFlight && isCardsMode && (
-          <Animated.ScrollView
+          // A column (not a scroll view): ProfileCard keeps its size and AddFriendCard fills what's
+          // left, scrolling its own list inside, so its rounded bottom always sits above the dock.
+          <Animated.View
             ref={cardsFlick.ref}
             {...(Platform.OS !== 'web' ? cardsFlick.panHandlers : null)}
             style={[
@@ -1005,8 +1009,6 @@ export function ThrowHomeScreen({
               // all the way down once the dock is gone instead of holding space open for it.
               { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) },
             ]}
-            contentContainerStyle={styles.cardsOverlayContent}
-            showsVerticalScrollIndicator={false}
           >
             <ProfileCard
               name="You"
@@ -1015,10 +1017,16 @@ export function ThrowHomeScreen({
               city={myLocation?.city ?? null}
               friendCount={friends.length}
               hasStatusToday={myId ? storyCountFor(myId) > 0 : false}
+              status={myLatestStory ? { uri: myLatestStory.mediaUrl, isVideo: myLatestStory.mediaType === 'video', trimStartMs: myLatestStory.trimStartMs, trimEndMs: myLatestStory.trimEndMs } : null}
+              onViewStatus={() => {
+                if (!myId) return;
+                setStoryFlow(null);
+                setStoryView({ userId: myId, viaAddSlot: true });
+              }}
               onAddStatus={() => setStoryFlow({ name: 'capture' })}
             />
-            <AddFriendCard onOpenAddFriendScreen={onOpenAddFriendScreen} />
-          </Animated.ScrollView>
+            <AddFriendCard onOpenAddFriendScreen={onOpenAddFriendScreen} style={styles.addFriendFill} />
+          </Animated.View>
         )}
 
         {/* The notification history — a floating glassmorphism card above the map instead of a
@@ -1240,8 +1248,8 @@ const styles = StyleSheet.create({
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
   notificationsOverlay: { position: 'absolute', left: 16, right: 16 },
-  cardsOverlay: { position: 'absolute', left: 16, right: 16 },
-  cardsOverlayContent: { gap: 12, paddingBottom: 12 },
+  cardsOverlay: { position: 'absolute', left: 16, right: 16, gap: 12 },
+  addFriendFill: { flex: 1, minHeight: 0 },
   replyLine: {
     textAlign: 'center',
     fontFamily: throwFont.ui700,

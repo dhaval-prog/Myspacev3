@@ -6,9 +6,9 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import type { FriendsMapCanvasProps } from './friendsMapCanvasTypes';
 
 mapboxgl.accessToken = MAPBOX_TOKEN;
-// A flat, muted street style (unlike ThrowMap's pitched "Standard" style) — this screen is a
+// A flat, full-colour street style (unlike ThrowMap's pitched "Standard" style) — this screen is a
 // straight-down 2D map, no 3D buildings/day-night config to drive.
-const MAPBOX_STYLE_URL = process.env.EXPO_PUBLIC_MAPBOX_FRIENDS_MAP_STYLE_URL ?? 'mapbox://styles/mapbox/light-v11';
+const MAPBOX_STYLE_URL = process.env.EXPO_PUBLIC_MAPBOX_FRIENDS_MAP_STYLE_URL ?? 'mapbox://styles/mapbox/streets-v12';
 
 // Design handoff's own starting camera — zoom 4 (256px-tile convention) centered on India.
 const DEFAULT_CENTER: [number, number] = [79.5, 21.5]; // Mapbox wants [lng, lat]
