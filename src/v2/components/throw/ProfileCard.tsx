@@ -55,7 +55,7 @@ export function ProfileCard({ name, avatarUrl, userId, city, friendCount, hasSta
 
       <View style={styles.footerRow}>
         <Pressable onPress={onAddStatus} style={styles.addStatusBtn} accessibilityRole="button" accessibilityLabel="Add status">
-          <Icon path={CAMERA_ICON} size={15} color={S.lime} strokeWidth={2.2} />
+          <Icon path={CAMERA_ICON} size={15} color="#FFFFFF" strokeWidth={2.2} />
           <Text style={styles.addStatusLabel}>Add status</Text>
         </Pressable>
         <Pressable onPress={onOpenProfile} disabled={!onOpenProfile} accessibilityRole="button" accessibilityLabel="Profile">

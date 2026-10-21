@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     // keeps every pill at its natural size no matter what.
     flexShrink: 0,
   },
-  filterPillActive: { backgroundColor: S.ink, borderColor: S.ink, boxShadow: `2px 2px 0 ${S.lime}` } as ViewStyle,
+  filterPillActive: { backgroundColor: S.ink, borderColor: S.ink, boxShadow: `2px 2px 0 #FFFFFF, 2px 2px 0 1.5px ${S.ink}` } as ViewStyle,
   filterLabel: { fontFamily: 'Figtree_600SemiBold', fontSize: 13, color: S.ink },
   filterLabelActive: { color: colors.white },
   sectionLabel: {
