@@ -53,6 +53,8 @@ export interface CatchLetter {
   time: string;
   text: string;
   media: string[];
+  /** Hugs the recipient has sent back so far. */
+  hugs: number;
 }
 
 const isVideo = (url: string) => /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
@@ -67,6 +69,7 @@ export function CatchLetterOverlay({
   onUnfolded,
   onWriteBack,
   toast,
+  onHugs,
 }: {
   letter: CatchLetter;
   startRead: boolean;
@@ -75,6 +78,8 @@ export function CatchLetterOverlay({
   onUnfolded: () => void;
   onWriteBack: () => void;
   toast: (msg: string) => void;
+  /** Recipient let go of Hold to hug after sending `n` hugs. */
+  onHugs?: (n: number) => void;
 }) {
   const { width: W, height: H } = useWindowDimensions();
   const [stage, setStage] = useState<'caught' | 'unfolding' | 'read'>(startRead ? 'read' : 'caught');
@@ -82,7 +87,7 @@ export function CatchLetterOverlay({
   const [dragging, setDragging] = useState(false);
   const [poke, setPoke] = useState(0);
   const [hugging, setHugging] = useState(false);
-  const [hugN, setHugN] = useState(0);
+  const [hugN, setHugN] = useState(letter.hugs);
   const [hearts, setHearts] = useState<{ k: number; x: number; r: number; s: number; c: string }[]>([]);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [video, setVideo] = useState<string | null>(null);
@@ -255,10 +260,30 @@ export function CatchLetterOverlay({
     const sent = hugCount.current;
     if (sent) {
       setHugN((x) => x + sent);
+      onHugs?.(sent);
       toast(`${first} felt your hug ×${sent}`);
     }
     later(() => setHearts([]), 1400);
   };
+
+  // The sender sees every hug they've been given float up each time they open their letter.
+  const replayed = useRef(false);
+  useEffect(() => {
+    if (stage !== 'read' || !letter.mine || letter.hugs <= 0 || replayed.current) return;
+    replayed.current = true;
+    const total = Math.min(letter.hugs, 40);
+    for (let i = 0; i < total; i++) {
+      later(() => {
+        if (i % 4 === 0) buzz();
+        setHearts((h) => [
+          ...h.slice(-40),
+          { k: Date.now() + i, x: 20 + Math.round(Math.random() * (W - 110)), r: Math.round(Math.random() * 40 - 20), s: Math.round((0.8 + Math.random() * 0.9) * 10) / 10, c: ['#FF5C8A', '#FFB4C8', '#FF8A6B'][i % 3] },
+        ]);
+      }, 700 + i * 110);
+    }
+    later(() => setHearts([]), 700 + total * 110 + 1500);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
 
   const words = letter.text.split(/\s+/).filter(Boolean);
   const wordDelay = (i: number) => 0.25 + Math.min(i, 40) * 0.07;
@@ -399,6 +424,14 @@ export function CatchLetterOverlay({
                   })}
                 </View>
               ) : null}
+              {letter.mine && letter.hugs > 0 ? (
+                <A style={[styles.huggedChip, anim(ctPop('A'), 0.45, 0.6, SPRING)]}>
+                  <Heart size={16} />
+                  <Text style={styles.huggedText}>
+                    {first} hugged your letter ×{letter.hugs}
+                  </Text>
+                </A>
+              ) : null}
               <A style={[styles.signRow, anim(ctInk(), 0.4, signD, 'ease-out')]}>
                 <Text style={styles.sign}>{letter.mine ? '— You' : `— ${first}`}</Text>
                 <A style={[styles.signLine, { transformOrigin: '0% 50%' } as ViewStyle, anim(ctDrawLine(), 0.6, signD, 'ease-out')]}>
@@ -487,6 +520,8 @@ const styles = StyleSheet.create({
   planeBox: { position: 'absolute', width: 220, height: 200 },
   flickBox: { position: 'absolute', left: 0, right: 0, bottom: 90, alignItems: 'center', gap: 8 },
   unfoldSheet: { position: 'absolute', left: 24, right: 24, borderRadius: 26, backgroundColor: PAPER, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,.35)' } as ViewStyle,
+  huggedChip: { alignSelf: 'center', marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#FFE1EA', borderWidth: 2, borderColor: INK },
+  huggedText: { fontFamily: 'Figtree_800ExtraBold', fontSize: 13.5, color: INK },
   flatSheet: { borderRadius: 26, backgroundColor: PAPER },
   readWrap: { position: 'absolute', left: 16, right: 16, bottom: 26, borderRadius: 26 },
   sheet: { flexGrow: 1, borderRadius: 26, backgroundColor: PAPER, padding: 20, boxShadow: '0 20px 50px rgba(0,0,0,.35)', transitionProperty: 'transform', transitionDuration: '0.3s' } as unknown as ViewStyle,

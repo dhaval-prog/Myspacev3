@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 import type { DirectMessage, Friend, FriendProfile, FriendRequest, MatchRelationship } from '../types/friends';
 import type { ChatGroup, GroupMessage, GroupPoll } from '../types/groups';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
@@ -474,11 +475,33 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId]);
 
+  // Names/photos come from a device cache first, so every profile is re-read once per session (and
+  // again whenever the app returns to the foreground) — otherwise a friend's new profile photo
+  // would never replace the cached one.
+  const freshProfileIds = useRef(new Set<string>());
+  const [profilesEpoch, setProfilesEpoch] = useState(0);
+  useEffect(() => {
+    const refresh = () => {
+      freshProfileIds.current.clear();
+      setProfilesEpoch((n) => n + 1);
+    };
+    if (Platform.OS === 'web') {
+      if (typeof document === 'undefined') return;
+      const onVis = () => document.visibilityState === 'visible' && refresh();
+      document.addEventListener('visibilitychange', onVis);
+      return () => document.removeEventListener('visibilitychange', onVis);
+    }
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && refresh());
+    return () => sub.remove();
+  }, []);
+  const needsProfile = (id: string) => !(id in profiles) || !freshProfileIds.current.has(id);
+
   // Backfill display info for every counterpart seen across connections.
   useEffect(() => {
     if (!userId || !isSupabaseConfigured) return;
-    const ids = Array.from(new Set(connectionRows.map((c) => counterpartId(c, userId)))).filter((id) => !(id in profiles));
+    const ids = Array.from(new Set(connectionRows.map((c) => counterpartId(c, userId)))).filter(needsProfile);
     if (ids.length === 0) return;
+    ids.forEach((id) => freshProfileIds.current.add(id));
     supabase
       .from('profiles')
       .select('id, full_name, username, avatar_url')
@@ -496,7 +519,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
       });
     // profiles deliberately excluded — read to find gaps, not to retrigger on every fill.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionRows, userId]);
+  }, [connectionRows, userId, profilesEpoch]);
 
   const toFriend = (row: ConnectionRow): Friend => {
     const id = counterpartId(row, userId ?? '');
@@ -1001,8 +1024,9 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
   // Backfill display info for every group member seen, reusing the same profiles cache as friends.
   useEffect(() => {
     if (!userId || !isSupabaseConfigured) return;
-    const ids = Array.from(new Set(groupMemberRows.map((m) => m.user_id))).filter((id) => !(id in profiles));
+    const ids = Array.from(new Set(groupMemberRows.map((m) => m.user_id))).filter(needsProfile);
     if (ids.length === 0) return;
+    ids.forEach((id) => freshProfileIds.current.add(id));
     supabase
       .from('profiles')
       .select('id, full_name, username, avatar_url')
@@ -1020,7 +1044,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
       });
     // profiles deliberately excluded — read to find gaps, not to retrigger on every fill.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupMemberRows, userId]);
+  }, [groupMemberRows, userId, profilesEpoch]);
 
   // Load the latest message per group, for the Chats list preview.
   useEffect(() => {

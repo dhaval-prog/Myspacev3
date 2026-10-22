@@ -4,7 +4,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { anim, loop } from '@/theme/anim';
-import { A, ctGlide, mono, PaperPlaneArt, READ_GREEN } from './threadFx';
+import { A, ctGlide, ctHeartChip, Heart, mono, PaperPlaneArt, READ_GREEN, SPRING } from './threadFx';
 
 export function LetterPlane({
   mine,
@@ -13,8 +13,11 @@ export function LetterPlane({
   time,
   entrance,
   night,
+  hugs = 0,
   onPress,
 }: {
+  /** Hugs sent back for this letter — shows a small pink heart on the right wing. */
+  hugs?: number;
   mine: boolean;
   hint: string;
   hintGreen?: boolean;
@@ -35,6 +38,11 @@ export function LetterPlane({
           <A style={[styles.plane, loop(ctGlide(), 3)]}>
             <View style={{ transform: [{ rotate: `${mine ? -10 : 30}deg` }] }}>
               <PaperPlaneArt width={96} />
+              {hugs > 0 ? (
+                <A style={[styles.wingHeart, anim(ctHeartChip(), 0.5, 0.3, SPRING)]}>
+                  <Heart size={17} />
+                </A>
+              ) : null}
             </View>
           </A>
           <Text style={[styles.hint, night && { color: 'rgba(255,255,255,.55)' }, hintGreen && { color: READ_GREEN }]}>{hint}</Text>
@@ -48,5 +56,7 @@ export function LetterPlane({
 const styles = StyleSheet.create({
   tap: { paddingTop: 6, paddingHorizontal: 6, gap: 2 },
   plane: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
+  // Sits on the right wing (artboard ≈ 92,70 of 130×118, scaled to 96px wide).
+  wingHeart: { position: 'absolute', left: 62, top: 40 },
   hint: { fontFamily: 'Figtree_600SemiBold', fontSize: 13, color: 'rgba(17,17,17,.45)' },
 });

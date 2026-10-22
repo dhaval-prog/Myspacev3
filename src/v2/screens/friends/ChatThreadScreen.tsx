@@ -57,7 +57,7 @@ import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { useFriendStreak } from '../../hooks/useFriendStreak';
 import { useMessageSendStatus } from '../../hooks/useMessageSendStatus';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { markLetterOpened, useThrowDetails } from '../../hooks/useThrowDetails';
+import { markLetterOpened, sendLetterHugs, useThrowDetails } from '../../hooks/useThrowDetails';
 
 const BACK = 'M15 5l-7 7 7 7';
 const PHONE =
@@ -342,7 +342,8 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
                     <LetterPlane
                       mine={mine}
                       night={night}
-                      hint={mine ? (opened ? 'Opened' : 'Delivered · unopened') : opened ? 'Opened' : 'Unopened'}
+                      hugs={detail?.hugCount ?? 0}
+                      hint={(mine ? (opened ? 'Opened' : 'Delivered · unopened') : opened ? 'Opened' : 'Unopened') + (detail?.hugCount ? ` · ♥ ${detail.hugCount}` : '')}
                       hintGreen={opened && mine}
                       time={timeLabel(m.createdAt)}
                       entrance={entrance}
@@ -351,7 +352,7 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
                         setCatching({
                           read: mine || opened,
                           throwId: m.throwId ?? null,
-                          letter: { id: m.id, mine, friendName: focusedFriend.name, city: m.attachmentUrl, time: timeLabel(m.createdAt), text: detail?.messageText?.trim() || m.text, media: detail?.media ?? [] },
+                          letter: { id: m.id, mine, friendName: focusedFriend.name, city: m.attachmentUrl, time: timeLabel(m.createdAt), text: detail?.messageText?.trim() || m.text, media: detail?.media ?? [], hugs: detail?.hugCount ?? 0 },
                         });
                       }}
                     />
@@ -600,6 +601,9 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
               markLetterOpened(catching.throwId).then(() => bump((n) => n + 1));
               bump((n) => n + 1);
             }
+          }}
+          onHugs={(n) => {
+            if (catching.throwId) sendLetterHugs(catching.throwId, n).then(() => bump((x) => x + 1));
           }}
           onWriteBack={() => {
             setCatching(null);

@@ -256,8 +256,9 @@ export function AccountSettingsScreen({ onBack }: AccountSettingsScreenProps) {
       const asset = result.assets[0];
       const response = await fetch(asset.uri);
       const blob = await response.blob();
-      const ext = (asset.uri.split('.').pop() || 'jpg').split('?')[0].toLowerCase();
-      const path = `${userId}/avatar.${ext}`;
+      // Web picks come back as blob:/data: URIs with no real extension — fall back to jpg.
+      const ext = (asset.uri.split('.').pop() || 'jpg').split('?')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+      const path = `${userId}/avatar.${ext && ext.length <= 4 ? ext : 'jpg'}`;
       const { error: upErr } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: blob.type || 'image/jpeg' });
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
