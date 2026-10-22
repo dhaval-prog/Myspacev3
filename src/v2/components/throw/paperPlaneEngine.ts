@@ -223,7 +223,9 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   renderer.toneMapping = THREE.NoToneMapping;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 300);
+  // near = 1 (not 0.1): the camera always sits 20+ units away, and a tighter near plane gives far
+  // better depth precision for the paper's stacked layers.
+  const camera = new THREE.PerspectiveCamera(32, 1, 1, 300);
   // Neutral white/near-white throughout (sky, key, fill) — the baked plane texture is now a flat
   // solid colour itself (white by day, see paperContentTexture.*), so the rig no longer needs a
   // warm cast to match the open paper's cream; a colored light here would just tint the white
@@ -274,6 +276,11 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   const segU = Array.from({ length: 48 }, (_, i) => (i < NC ? new THREE.Vector4(creases[i].a[0], creases[i].a[1], creases[i].b[0], creases[i].b[1]) : new THREE.Vector4()));
   const strU = new Float32Array(48);
   const mat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.88, metalness: 0, side: THREE.DoubleSide, transparent: true });
+  // Pull the paper slightly toward the camera in the depth test so a sheet lying flat on the shadow
+  // ground never z-fights with it (showed as speckled paper mid-fold, worse with the camera pulled back).
+  mat.polygonOffset = true;
+  mat.polygonOffsetFactor = -2;
+  mat.polygonOffsetUnits = -4;
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uSeg = { value: segU };
     sh.uniforms.uStr = { value: strU };

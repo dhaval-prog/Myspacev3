@@ -4,7 +4,7 @@
 //  read      – words ink in, photos/videos drop in as taped polaroids, the signature draws itself;
 //              Hold to hug (hearts float up) and Write back (opens Throw to this friend)
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ViewStyle } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, Path } from 'react-native-svg';
 
@@ -22,6 +22,7 @@ import {
   ctDrawLine,
   ctFade,
   ctFadeOut,
+  ctFlyAway,
   ctHeartUp,
   ctHover,
   ctIn,
@@ -82,7 +83,11 @@ export function CatchLetterOverlay({
   onHugs?: (n: number) => void;
 }) {
   const { width: W, height: H } = useWindowDimensions();
-  const [stage, setStage] = useState<'caught' | 'unfolding' | 'read'>(startRead ? 'read' : 'caught');
+  const [stage, setStage] = useState<'caught' | 'unfolding' | 'read' | 'flying'>(startRead ? 'read' : 'caught');
+  // Once read, the letter can be folded back into a plane (drag down) and flicked away (up).
+  const [opened, setOpened] = useState(startRead);
+  const [foldingDown, setFoldingDown] = useState(false);
+  const [cardH, setCardH] = useState(0);
   const [dy, setDy] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [poke, setPoke] = useState(0);
@@ -99,9 +104,11 @@ export function CatchLetterOverlay({
   // plane → flat sheet). Falls back to the flat SVG plane if WebGL isn't available.
   const stageRef = useRef<PaperPlaneStageHandle>(null);
   const [stageFailed, setStageFailed] = useState(false);
-  const [unfoldU, setUnfoldU] = useState(0);
-  const unfoldRef = useRef(0);
+  const [unfoldU, setUnfoldU] = useState(startRead ? 1 : 0);
+  const unfoldRef = useRef(startRead ? 1 : 0);
   const draggingRef = useRef(false);
+  // Own flick tracking (gesture velocity is unreliable on web): when the drag started and its last few samples.
+  const flickRef = useRef<{ t0: number; samples: { t: number; y: number }[] }>({ t0: 0, samples: [] });
   const raf = useRef<number | null>(null);
   const later = (fn: () => void, ms: number) => timers.current.push(setTimeout(fn, ms));
   useEffect(
@@ -124,7 +131,7 @@ export function CatchLetterOverlay({
 
   // Bake the letter onto the plane and start fully folded.
   useEffect(() => {
-    if (stage !== 'caught' || stageFailed) return;
+    if (stageFailed) return;
     const photo = letter.media.find((u) => !isVideo(u)) ?? null;
     const bake = () => stageRef.current?.setContent({ messageText: letter.text, strokes: null, penColor: INK_BLUE, photoUri: photo, isNight: false }, { width: sheetW, height: sheetH });
     stageRef.current?.setOptions({ zoomOut: 1.55, follow: false });
@@ -141,7 +148,7 @@ export function CatchLetterOverlay({
     }, 250);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage === 'caught', stageFailed]);
+  }, [stageFailed]);
 
   const setUnfold = (u: number) => {
     unfoldRef.current = u;
@@ -166,10 +173,53 @@ export function CatchLetterOverlay({
     buzz(true);
     setDragging(false);
     animateUnfold(1, 420, () => {
-      onUnfolded();
+      if (!opened) onUnfolded();
+      setOpened(true);
       setStage('read');
     });
   };
+  /** Folded back up: flick it away and it flies off the top, back to the chat. */
+  const flyAway = () => {
+    buzz(true);
+    setDragging(false);
+    setStage('flying');
+    later(onClose, 750);
+  };
+
+  // Drag the open letter down to fold it back into a plane (the Throw screen's fold, scrubbed).
+  const foldPan = Gesture.Pan()
+    .runOnJS(true)
+    .enabled(stage === 'read' && use3d)
+    .activeOffsetY(14)
+    .failOffsetX([-24, 24])
+    .onStart(() => {
+      crossed.current = false;
+      draggingRef.current = true;
+      setFoldingDown(true);
+      setDragging(true);
+    })
+    .onUpdate((e) => {
+      const u = 1 - Math.min(1, Math.max(0, e.translationY / dragDist));
+      if (u <= 0.5 && !crossed.current) {
+        crossed.current = true;
+        buzz();
+      }
+      setUnfold(u);
+    })
+    .onEnd((e) => {
+      const u = unfoldRef.current;
+      if (u <= 0.5 || (u < 0.88 && e.velocityY > 700)) {
+        buzz(true);
+        animateUnfold(0, 380, () => {
+          setFoldingDown(false);
+          setStage('caught');
+        });
+      } else animateUnfold(1, 260, () => setFoldingDown(false));
+    })
+    .onFinalize(() => {
+      draggingRef.current = false;
+      setDragging(false);
+    });
 
   const unfold = () => {
     buzz(true);
@@ -186,9 +236,12 @@ export function CatchLetterOverlay({
     .onBegin(() => {
       crossed.current = false;
       draggingRef.current = true;
+      flickRef.current = { t0: Date.now(), samples: [] };
       setDragging(true);
     })
     .onUpdate((e) => {
+      const fr = flickRef.current;
+      fr.samples = [...fr.samples.slice(-5), { t: Date.now(), y: e.translationY }];
       if (use3d) {
         const u = Math.min(1, Math.max(0, -e.translationY / dragDist));
         if (u >= 0.5 && !crossed.current) {
@@ -208,7 +261,15 @@ export function CatchLetterOverlay({
     .onEnd((e) => {
       if (use3d) {
         const u = unfoldRef.current;
-        if (u >= 0.5 || (u > 0.12 && e.velocityY < -700)) finish3dUnfold();
+        const fr = flickRef.current;
+        const a = fr.samples[0];
+        const b = fr.samples[fr.samples.length - 1];
+        const v = a && b && b.t > a.t ? ((b.y - a.y) / (b.t - a.t)) * 1000 : 0;
+        const flicked = e.translationY < -30 && (e.velocityY < -900 || v < -900 || (Date.now() - fr.t0 < 350 && e.translationY < -60));
+        if (opened && flicked) {
+          setUnfold(0);
+          flyAway();
+        } else if (u >= 0.5 || (!opened && u > 0.12 && e.velocityY < -700)) finish3dUnfold();
         else {
           setDragging(false);
           animateUnfold(0, 320);
@@ -233,7 +294,7 @@ export function CatchLetterOverlay({
       if (!ok) return;
       buzz();
       setPoke((n) => n + 1);
-      toast(use3d ? 'Hold and drag it upward to unfold' : 'Flick it upward to unfold');
+      toast(!use3d ? 'Flick it upward to unfold' : opened ? 'Flick it up to send it off, or drag up slowly to open' : 'Hold and drag it upward to unfold');
     });
 
   const startHug = () => {
@@ -295,29 +356,38 @@ export function CatchLetterOverlay({
     <View style={[StyleSheet.absoluteFill, { zIndex: 30 }]}>
       <A style={[StyleSheet.absoluteFill, styles.backdrop, anim(ctFade(), 0.25, 0, 'ease-out')]} />
 
+      {use3d ? (
+        // One 3D plane for the whole visit: unfolding, folding back up and flying off.
+        <A
+          pointerEvents="none"
+          style={[
+            { position: 'absolute', left: 16, top: sheetTop, width: sheetW, height: sheetH, opacity: stage === 'caught' || stage === 'flying' || foldingDown ? 1 : 0 },
+            stage === 'flying' ? anim(ctFlyAway(), 0.75, 0, 'ease-in') : null,
+          ]}
+        >
+          {/* The flat sheet takes over from the 3D paper over the last stretch, as on Throw. */}
+          <View style={[styles.flatSheet, { position: 'absolute', left: 0, right: 0, top: cardH ? Math.max(0, (sheetH - cardH) / 2) : 0, height: cardH || sheetH, opacity: Math.max(0, (unfoldU - 0.8) / 0.2) }]} />
+          <A style={[{ flex: 1 }, opened ? null : anim(ctCatchPop(), 0.65, 0, SPRING)]}>
+            <A key={poke} style={[{ flex: 1 }, poke ? anim(ctPoke(poke % 2 ? 'A' : 'B'), 0.45, 0, 'ease-out') : !dragging && unfoldU === 0 && stage === 'caught' ? loop(ctHover(), 2.4) : null]}>
+              <View style={{ flex: 1, opacity: Math.min(1, (1 - unfoldU) / 0.2) }}>
+                <PaperPlaneStage ref={stageRef} onError={() => setStageFailed(true)} />
+              </View>
+            </A>
+          </A>
+        </A>
+      ) : null}
+
       {stage === 'caught' ? (
         <GestureDetector gesture={Gesture.Simultaneous(pan, tap)}>
           <View style={StyleSheet.absoluteFill}>
             <A pointerEvents="none" style={[styles.caughtTitle, { top: topInset + 60 }, anim(ctIn(), 0.4, 0.15, 'ease-out')]}>
-              <Text style={mono(11, LIME, 2)}>CAUGHT ONE!</Text>
+              <Text style={mono(11, LIME, 2)}>{opened ? 'FOLDED UP' : 'CAUGHT ONE!'}</Text>
               <Text style={styles.caughtFrom}>
                 From {first}
                 {letter.city ? ` · ${letter.city}` : ''}
               </Text>
             </A>
-            {use3d ? (
-              <View pointerEvents="none" style={{ position: 'absolute', left: 16, top: sheetTop, width: sheetW, height: sheetH }}>
-                {/* The flat sheet takes over from the 3D paper over the last stretch, as on Throw. */}
-                <View style={[StyleSheet.absoluteFill, styles.flatSheet, { opacity: Math.max(0, (unfoldU - 0.8) / 0.2) }]} />
-                <A style={[{ flex: 1 }, anim(ctCatchPop(), 0.65, 0, SPRING)]}>
-                  <A key={poke} style={[{ flex: 1 }, poke ? anim(ctPoke(poke % 2 ? 'A' : 'B'), 0.45, 0, 'ease-out') : !dragging && unfoldU === 0 ? loop(ctHover(), 2.4) : null]}>
-                    <View style={{ flex: 1, opacity: Math.min(1, (1 - unfoldU) / 0.2) }}>
-                      <PaperPlaneStage ref={stageRef} onError={() => setStageFailed(true)} />
-                    </View>
-                  </A>
-                </A>
-              </View>
-            ) : (
+            {use3d ? null : (
             <View
               pointerEvents="none"
               style={[
@@ -345,7 +415,7 @@ export function CatchLetterOverlay({
                   </Svg>
                 </A>
               </View>
-              <Text style={[mono(12, '#fff', 2), { fontFamily: 'SpaceMono_700Bold' }]}>{prog >= 1 ? 'LET GO!' : prog > 0.05 ? 'KEEP GOING…' : use3d ? 'HOLD & DRAG UP TO UNFOLD' : 'FLICK UP TO UNFOLD'}</Text>
+              <Text style={[mono(12, '#fff', 2), { fontFamily: 'SpaceMono_700Bold' }]}>{prog >= 1 ? 'LET GO!' : prog > 0.05 ? 'KEEP GOING…' : !use3d ? 'FLICK UP TO UNFOLD' : opened ? 'FLICK UP TO SEND IT OFF' : 'HOLD & DRAG UP TO UNFOLD'}</Text>
             </View>
           </View>
         </GestureDetector>
@@ -367,8 +437,15 @@ export function CatchLetterOverlay({
       ) : null}
 
       {stage === 'read' ? (
-        <A style={[styles.readWrap, { top: topInset + 56 }, anim(ctReadIn(), 0.3, 0, 'ease-out')]}>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+        <View pointerEvents="box-none" style={[styles.readWrap, { top: sheetTop }]}>
+          <GestureDetector gesture={foldPan}>
+          {/* Fade lives on this plain wrapper: the entrance keyframe below holds opacity at 1. */}
+          <View
+            onLayout={(e: LayoutChangeEvent) => setCardH(Math.round(e.nativeEvent.layout.height))}
+            style={[styles.card, { opacity: foldingDown ? Math.max(0, (unfoldU - 0.8) / 0.2) : 1 }]}
+          >
+          <A style={[{ flexShrink: 1 }, anim(ctReadIn(), 0.3, 0, 'ease-out')]}>
+          <ScrollView style={{ flexGrow: 0 }} showsVerticalScrollIndicator={false}>
             <View style={[styles.sheet, { transform: [{ scale: hugging ? 0.97 : 1 }] }]}>
               <View style={styles.sheetHead}>
                 <A style={[styles.stamp, anim(ctStamp(), 0.45, 0.15, SPRING)]}>
@@ -442,7 +519,6 @@ export function CatchLetterOverlay({
               </A>
               {!letter.mine ? (
                 <>
-                  <View style={{ flexGrow: 1, minHeight: 18 }} />
                   <View style={styles.actions}>
                     <Pressable
                       onPressIn={startHug}
@@ -479,7 +555,15 @@ export function CatchLetterOverlay({
               ))}
             </View>
           </ScrollView>
-        </A>
+          </A>
+          </View>
+          </GestureDetector>
+          {use3d && !foldingDown ? (
+            <Text pointerEvents="none" style={[mono(10.5, 'rgba(255,255,255,.6)', 1.4), { textAlign: 'center', marginTop: 12 }]}>
+              DRAG THE LETTER DOWN TO FOLD IT BACK
+            </Text>
+          ) : null}
+        </View>
       ) : null}
 
       <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close letter" style={[styles.closeBtn, { top: topInset + 8 }]}>
@@ -523,8 +607,9 @@ const styles = StyleSheet.create({
   huggedChip: { alignSelf: 'center', marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#FFE1EA', borderWidth: 2, borderColor: INK },
   huggedText: { fontFamily: 'Figtree_800ExtraBold', fontSize: 13.5, color: INK },
   flatSheet: { borderRadius: 26, backgroundColor: PAPER },
-  readWrap: { position: 'absolute', left: 16, right: 16, bottom: 26, borderRadius: 26 },
-  sheet: { flexGrow: 1, borderRadius: 26, backgroundColor: PAPER, padding: 20, boxShadow: '0 20px 50px rgba(0,0,0,.35)', transitionProperty: 'transform', transitionDuration: '0.3s' } as unknown as ViewStyle,
+  card: { maxHeight: '100%', borderRadius: 26, overflow: 'hidden' },
+  readWrap: { position: 'absolute', left: 16, right: 16, bottom: 26, justifyContent: 'center' },
+  sheet: { borderRadius: 26, backgroundColor: PAPER, padding: 20, boxShadow: '0 20px 50px rgba(0,0,0,.35)', transitionProperty: 'transform', transitionDuration: '0.3s' } as unknown as ViewStyle,
   sheetHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   stamp: { borderWidth: 3, borderColor: '#2F4BE0', borderRadius: 9, paddingVertical: 3, paddingHorizontal: 10 },
   stampText: { fontFamily: 'SpaceMono_700Bold', fontSize: 13, letterSpacing: 1.8, color: '#2F4BE0' },

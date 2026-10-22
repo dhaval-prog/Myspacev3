@@ -119,6 +119,15 @@ export const ctSheetOpen = () =>
       '100%': { opacity: 1, transform: [{ perspective: 900 }, { rotateX: '0deg' }, { scaleX: 1 }, { scaleY: 1 }] },
     }),
   );
+/** A folded letter flicked away: it shoots up off the top of the screen. */
+export const ctFlyAway = () =>
+  kf('ctFlyAway', () =>
+    T({
+      '0%': { opacity: 1, transform: [{ translateY: 0 }, { translateX: 0 }, { rotate: '0deg' }, { scale: 1 }] },
+      '20%': { opacity: 1, transform: [{ translateY: 30 }, { translateX: -6 }, { rotate: '4deg' }, { scale: 1.03 }] },
+      '100%': { opacity: 0, transform: [{ translateY: -900 }, { translateX: 60 }, { rotate: '-18deg' }, { scale: 0.45 }] },
+    }),
+  );
 export const ctFadeOut = () => kf('ctFadeOut', () => T({ '0%': { opacity: 1 }, '100%': { opacity: 0 } }));
 export const ctFade = () => kf('ctFade', () => T({ '0%': { opacity: 0 }, '100%': { opacity: 1 } }));
 export const ctStamp = () =>
