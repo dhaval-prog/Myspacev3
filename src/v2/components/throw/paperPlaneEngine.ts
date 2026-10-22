@@ -494,12 +494,14 @@ export function createPaperPlane(options: PaperPlaneOptions) {
   /* ---------- camera ---------- */
   const camTarget = new THREE.Vector3(0, 0, 1.4), camGoal = new THREE.Vector3();
   let camDist = 24, aspect = 1;
+  // >1 pulls the camera back (a smaller plane with more room around it) — see setOptions.
+  let zoomOut = 1;
   function resize(w: number, h: number) {
     renderer.setSize(w, h, false);
     aspect = w / Math.max(1, h);
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    camDist = 23 * Math.max(1, 1.45 / aspect);
+    camDist = 23 * Math.max(1, 1.45 / aspect) * zoomOut;
   }
   resize(options.width, options.height);
   function placeCamera(time: number) {
@@ -722,10 +724,14 @@ export function createPaperPlane(options: PaperPlaneOptions) {
     setReadyBank(v: number) {
       readyBankExtra = Math.max(-1, Math.min(1, v));
     },
-    setOptions(o: { speed?: number; trail?: boolean; follow?: boolean }) {
+    setOptions(o: { speed?: number; trail?: boolean; follow?: boolean; zoomOut?: number }) {
       if (o.speed) speed = o.speed;
       if (o.trail != null) trail = o.trail;
       if (o.follow != null) follow = o.follow;
+      if (o.zoomOut != null && o.zoomOut > 0 && o.zoomOut !== zoomOut) {
+        camDist = (camDist / zoomOut) * o.zoomOut;
+        zoomOut = o.zoomOut;
+      }
     },
     /**
      * Swaps the material's texture (e.g. a freshly-baked letter texture) and disposes the old
