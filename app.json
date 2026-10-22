@@ -8,7 +8,7 @@
     "scheme": "myspacev3",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "app.myspace.v3",
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
@@ -18,7 +18,8 @@
           "paytmmp",
           "bhim"
         ]
-      }
+      },
+      "requireFullScreen": true
     },
     "android": {
       "adaptiveIcon": {
