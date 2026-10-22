@@ -21,6 +21,9 @@ function loadBaseImage(): Promise<HTMLImageElement> {
 function loadPhotoImage(uri: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // Remote photos (e.g. a received letter's, from storage) must be loaded with CORS, or drawing
+    // them taints the canvas and WebGL can't upload it — the whole plane then renders black.
+    if (/^https?:/i.test(uri)) img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = uri;

@@ -10,6 +10,17 @@ export interface ThrowDetail {
   readAt: string | null;
   /** Hugs the recipient has sent back for this letter. */
   hugCount: number;
+  /** The ink it was written in — a light ink means it was written on (and thrown as) dark paper. */
+  penColor: string | null;
+}
+
+/** Night letters are written in light ink on dark paper; the pen colour is what records that. */
+export function isDarkPaper(penColor: string | null | undefined): boolean {
+  const m = /^#?([0-9a-f]{6})$/i.exec(penColor ?? '');
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.6;
 }
 
 // A letter's text and media never change once thrown; its read state and hugs do, so every letter
@@ -28,13 +39,13 @@ export function useThrowDetails(ids: (string | null | undefined)[]): Record<stri
     let live = true;
     supabase
       .from('throws')
-      .select('id, message_text, photo_urls, photo_url, read_at, hug_count')
+      .select('id, message_text, photo_urls, photo_url, read_at, hug_count, pen_color')
       .in('id', missing)
       .then(({ data, error }) => {
         if (error) return console.warn('[letters] failed to load letter details:', error.message);
-        for (const r of (data ?? []) as { id: string; message_text: string | null; photo_urls: string[] | null; photo_url: string | null; read_at: string | null; hug_count: number | null }[]) {
+        for (const r of (data ?? []) as { id: string; message_text: string | null; photo_urls: string[] | null; photo_url: string | null; read_at: string | null; hug_count: number | null; pen_color: string | null }[]) {
           const media = r.photo_urls?.length ? r.photo_urls : r.photo_url ? [r.photo_url] : [];
-          cache.set(r.id, { id: r.id, messageText: r.message_text, media, readAt: r.read_at, hugCount: r.hug_count ?? 0 });
+          cache.set(r.id, { id: r.id, messageText: r.message_text, media, readAt: r.read_at, hugCount: r.hug_count ?? 0, penColor: r.pen_color });
         }
         if (live) setVersion((v) => v + 1);
       });

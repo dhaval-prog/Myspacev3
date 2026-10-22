@@ -11,6 +11,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { anim, loop } from '@/theme/anim';
 import { AutoplayVideoFill } from '../../AutoplayVideoFill';
 import { INK_BLUE } from '../../throw/LetterCanvas';
+import { throwNightColor } from '../../../theme/throwTokens';
 import { PaperPlaneStage } from '../../throw/PaperPlaneStage';
 import type { PaperPlaneStageHandle } from '../../throw/paperPlaneTypes';
 import {
@@ -56,6 +57,8 @@ export interface CatchLetter {
   media: string[];
   /** Hugs the recipient has sent back so far. */
   hugs: number;
+  /** Written on dark (night) paper — the plane and letter keep that colour. */
+  dark?: boolean;
 }
 
 const isVideo = (url: string) => /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
@@ -109,6 +112,10 @@ export function CatchLetterOverlay({
   const draggingRef = useRef(false);
   // Own flick tracking (gesture velocity is unreliable on web): when the drag started and its last few samples.
   const flickRef = useRef<{ t0: number; samples: { t: number; y: number }[] }>({ t0: 0, samples: [] });
+  // On a folded-up (already read) plane: a quick flick sends it off; holding first, then dragging
+  // up, unfolds it. Decided once per drag, when the finger first moves.
+  const dragMode = useRef<'undecided' | 'unfold' | 'flick'>('undecided');
+  const [flickDy, setFlickDy] = useState(0);
   const raf = useRef<number | null>(null);
   const later = (fn: () => void, ms: number) => timers.current.push(setTimeout(fn, ms));
   useEffect(
@@ -121,6 +128,7 @@ export function CatchLetterOverlay({
   );
 
   const first = letter.friendName.trim().split(/\s+/)[0] || 'them';
+  const dark = !!letter.dark;
   const use3d = !stageFailed;
   const prog = use3d ? Math.min(1, unfoldU / 0.5) : Math.min(1, Math.max(0, -dy / FLICK));
   const planeTop = Math.round(H * 0.4);
@@ -135,7 +143,8 @@ export function CatchLetterOverlay({
   useEffect(() => {
     if (stageFailed) return;
     const photo = letter.media.find((u) => !isVideo(u)) ?? null;
-    const bake = () => stageRef.current?.setContent({ messageText: letter.text, strokes: null, penColor: INK_BLUE, photoUri: photo, isNight: false }, { width: sheetW, height: sheetH });
+    const bake = () =>
+      stageRef.current?.setContent({ messageText: letter.text, strokes: null, penColor: dark ? throwNightColor.ink : INK_BLUE, photoUri: photo, isNight: dark }, { width: sheetW, height: sheetH });
     stageRef.current?.setOptions({ zoomOut: 1.55, follow: false });
     bake();
     // The 3D engine only starts once it has measured its box (and three.js may still be loading),
@@ -239,11 +248,20 @@ export function CatchLetterOverlay({
       crossed.current = false;
       draggingRef.current = true;
       flickRef.current = { t0: Date.now(), samples: [] };
+      dragMode.current = opened ? 'undecided' : 'unfold';
       setDragging(true);
     })
     .onUpdate((e) => {
       const fr = flickRef.current;
       fr.samples = [...fr.samples.slice(-5), { t: Date.now(), y: e.translationY }];
+      if (use3d && dragMode.current === 'undecided' && Math.abs(e.translationY) > 8) {
+        dragMode.current = Date.now() - fr.t0 >= 260 ? 'unfold' : 'flick';
+      }
+      if (use3d && dragMode.current === 'flick') {
+        setFlickDy(Math.min(0, e.translationY));
+        return;
+      }
+      if (use3d && dragMode.current === 'undecided') return;
       if (use3d) {
         const u = Math.min(1, Math.max(0, -e.translationY / dragDist));
         if (u >= 0.5 && !crossed.current) {
@@ -268,9 +286,12 @@ export function CatchLetterOverlay({
         const b = fr.samples[fr.samples.length - 1];
         const v = a && b && b.t > a.t ? ((b.y - a.y) / (b.t - a.t)) * 1000 : 0;
         const flicked = e.translationY < -30 && (e.velocityY < -900 || v < -900 || (Date.now() - fr.t0 < 350 && e.translationY < -60));
-        if (opened && flicked) {
-          setUnfold(0);
-          flyAway();
+        if (dragMode.current === 'flick') {
+          if (flicked || e.translationY < -60) flyAway();
+          else {
+            setDragging(false);
+            setFlickDy(0);
+          }
         } else if (u >= 0.5 || (!opened && u > 0.12 && e.velocityY < -700)) finish3dUnfold();
         else {
           setDragging(false);
@@ -296,7 +317,7 @@ export function CatchLetterOverlay({
       if (!ok) return;
       buzz();
       setPoke((n) => n + 1);
-      toast(!use3d ? 'Flick it upward to unfold' : opened ? 'Flick it up to send it off, or drag up slowly to open' : 'Hold and drag it upward to unfold');
+      toast(!use3d ? 'Flick it upward to unfold' : opened ? 'Flick it up to send it off · hold, then drag up to open' : 'Hold and drag it upward to unfold');
     });
 
   const startHug = () => {
@@ -363,12 +384,12 @@ export function CatchLetterOverlay({
         <A
           pointerEvents="none"
           style={[
-            { position: 'absolute', left: 16, top: sheetTop, width: sheetW, height: sheetH, opacity: stage === 'caught' || stage === 'flying' || foldingDown ? 1 : 0 },
+            { position: 'absolute', left: 16, top: sheetTop, width: sheetW, height: sheetH, opacity: stage === 'caught' || stage === 'flying' || foldingDown ? 1 : 0, transform: [{ translateY: flickDy }, { rotate: `${(flickDy * 0.04).toFixed(1)}deg` }] },
             stage === 'flying' ? anim(ctFlyAway(), 0.75, 0, 'ease-in') : null,
           ]}
         >
           {/* The flat sheet takes over from the 3D paper over the last stretch, as on Throw. */}
-          <View style={[styles.flatSheet, { position: 'absolute', left: 0, right: 0, top: cardH ? Math.max(0, (sheetH - cardH) / 2) : 0, height: cardH || sheetH, opacity: Math.max(0, (unfoldU - 0.8) / 0.2) }]} />
+          <View style={[styles.flatSheet, dark && { backgroundColor: throwNightColor.paper }, { position: 'absolute', left: 0, right: 0, top: cardH ? Math.max(0, (sheetH - cardH) / 2) : 0, height: cardH || sheetH, opacity: Math.max(0, (unfoldU - 0.8) / 0.2) }]} />
           <A style={[{ flex: 1 }, opened ? null : anim(ctCatchPop(), 0.65, 0, SPRING)]}>
             <A key={poke} style={[{ flex: 1 }, poke ? anim(ctPoke(poke % 2 ? 'A' : 'B'), 0.45, 0, 'ease-out') : !dragging && unfoldU === 0 && stage === 'caught' ? loop(ctHover(), 2.4) : null]}>
               <View style={{ flex: 1, opacity: Math.min(1, (1 - unfoldU) / 0.2) }}>
@@ -417,7 +438,7 @@ export function CatchLetterOverlay({
                   </Svg>
                 </A>
               </View>
-              <Text style={[mono(12, '#fff', 2), { fontFamily: 'SpaceMono_700Bold' }]}>{prog >= 1 ? 'LET GO!' : prog > 0.05 ? 'KEEP GOING…' : !use3d ? 'FLICK UP TO UNFOLD' : opened ? 'FLICK UP TO SEND IT OFF' : 'HOLD & DRAG UP TO UNFOLD'}</Text>
+              <Text style={[mono(12, '#fff', 2), { fontFamily: 'SpaceMono_700Bold', textAlign: 'center', lineHeight: 20, paddingHorizontal: 16 }]}>{prog >= 1 ? 'LET GO!' : prog > 0.05 ? 'KEEP GOING…' : !use3d ? 'FLICK UP TO UNFOLD' : opened ? 'FLICK UP TO SEND IT OFF\nOR HOLD, THEN DRAG UP TO OPEN' : 'HOLD & DRAG UP TO UNFOLD'}</Text>
             </View>
           </View>
         </GestureDetector>
@@ -458,12 +479,12 @@ export function CatchLetterOverlay({
           >
           <A style={[{ flexShrink: 1 }, anim(ctReadIn(), 0.3, 0, 'ease-out')]}>
           <ScrollView style={{ flexGrow: 0 }} showsVerticalScrollIndicator={false}>
-            <View style={[styles.sheet, { transform: [{ scale: hugging ? 0.97 : 1 }] }]}>
+            <View style={[styles.sheet, dark && { backgroundColor: throwNightColor.paper }, { transform: [{ scale: hugging ? 0.97 : 1 }] }]}>
               <View style={styles.sheetHead}>
-                <A style={[styles.stamp, anim(ctStamp(), 0.45, 0.15, SPRING)]}>
-                  <Text style={styles.stampText}>{letter.mine ? `TO ${first.toUpperCase()}` : `FROM ${first.toUpperCase()}`}</Text>
+                <A style={[styles.stamp, dark && { borderColor: '#9EB3FF' }, anim(ctStamp(), 0.45, 0.15, SPRING)]}>
+                  <Text style={[styles.stampText, dark && { color: '#9EB3FF' }]}>{letter.mine ? `TO ${first.toUpperCase()}` : `FROM ${first.toUpperCase()}`}</Text>
                 </A>
-                <Text style={[mono(10.5, 'rgba(17,17,17,.45)', 1), { textAlign: 'right', lineHeight: 15 }]}>
+                <Text style={[mono(10.5, dark ? 'rgba(242,240,234,.55)' : 'rgba(17,17,17,.45)', 1), { textAlign: 'right', lineHeight: 15 }]}>
                   {letter.city ? letter.city.toUpperCase() + '\n' : ''}
                   {letter.time}
                 </Text>
@@ -471,7 +492,7 @@ export function CatchLetterOverlay({
               <View style={styles.words}>
                 {words.map((w, i) => (
                   <A key={i} style={anim(ctInk(), 0.4, wordDelay(i), 'ease-out')}>
-                    <Text style={styles.word}>{w}</Text>
+                    <Text style={[styles.word, dark && { color: throwNightColor.ink }]}>{w}</Text>
                   </A>
                 ))}
               </View>
