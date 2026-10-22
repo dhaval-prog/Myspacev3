@@ -37,7 +37,7 @@ export function FriendsScreen({ onHome, onOpenExpenses, onOpenThrow, onOpenGames
     case 'requests':
       return <FriendRequestsScreen />;
     case 'chat':
-      return <ChatThreadScreen />;
+      return <ChatThreadScreen onOpenThrow={onOpenThrow} />;
     case 'locked-chat':
       return <LockedThreadScreen />;
     case 'create-group':

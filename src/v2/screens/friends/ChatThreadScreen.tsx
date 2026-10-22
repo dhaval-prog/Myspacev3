@@ -1,178 +1,224 @@
-import React, { type ComponentRef, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+// The 1:1 chat thread (Chat Thread · Sticker spec): olive header with call + ⋮ menu, lime/white
+// bubbles with reactions, double-tap hearts and swipe-to-reply, Throw letters as paper planes you
+// catch and flick open, a + tray (photo / location / media), the streak flame and live receipts.
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path } from 'react-native-svg';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { colors, fontFamily, noOutline, radius, spacing } from '../../theme';
-import { Icon } from '../../components/Icon';
-import { OverflowIcon } from '../../components/icons/OverflowIcon';
-import { FriendAvatar } from '../../components/friends/FriendAvatar';
-import { GlassSurface } from '../../components/friends/GlassSurface';
+import React, { type ComponentRef, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle, Path } from 'react-native-svg';
+
+import { anim, loop } from '@/theme/anim';
+import { noOutline } from '../../theme';
 import { BottomSheet } from '../../components/expenses/BottomSheet';
 import { ActionButton } from '../../components/account/rows';
 import { MediaGalleryModal } from '../../components/chat/MediaGalleryModal';
-import { PlaneGlyph } from '../../components/chat/PlaneGlyph';
-import { AnimatedMessageWrap } from '../../components/chat/AnimatedMessageWrap';
-import { LetterThrownCard } from '../../components/chat/LetterThrownCard';
-import { STATUS_LABEL, STATUS_COLOR } from '../../components/chat/sendStatus';
-import { useFriends } from '../../context/FriendsContext';
-import type { DirectMessage } from '../../types/friends';
+import { FriendAvatar } from '../../components/friends/FriendAvatar';
+import { RealFlame } from '../../components/throw/letterFxReal';
+import { ChatBubble, QUOTE_PREFIX, splitQuote } from '../../components/chat/thread/ChatBubble';
+import { LetterPlane } from '../../components/chat/thread/LetterPlane';
+import { CatchLetterOverlay, type CatchLetter } from '../../components/chat/thread/CatchLetterOverlay';
+import {
+  A,
+  buzz,
+  ctDots,
+  ctFlash,
+  ctHeartUp,
+  ctIn,
+  ctJig,
+  ctMine,
+  ctPhone,
+  ctPicker,
+  ctPop,
+  ctSendFly,
+  ctStreak,
+  ctTheirs,
+  ctThrowIn,
+  ctThrowMine,
+  ctTray,
+  ctTrayPop,
+  Heart,
+  INK,
+  LIME,
+  mono,
+  OLIVE,
+  PAPER,
+  READ_GREEN,
+  SEND_PATH,
+  SPRING,
+  Toast,
+} from '../../components/chat/thread/threadFx';
 import { useAuth } from '../../context/AuthContext';
 import { useCall } from '../../context/CallContext';
+import { useFriends } from '../../context/FriendsContext';
 import { useThrowColorMode } from '../../context/ThrowColorModeContext';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useFriendStreak } from '../../hooks/useFriendStreak';
 import { useMessageSendStatus } from '../../hooks/useMessageSendStatus';
-import { useSendPlaneFly } from '../../hooks/useSendPlaneFly';
-import { useThrowDetails } from '../../hooks/useThrowDetails';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { markLetterOpened, useThrowDetails } from '../../hooks/useThrowDetails';
 
-const CHECK_ICON = 'M5 12.5 10 17.5 19 7';
-const BACK_ICON = 'M15 5l-7 7 7 7';
-const ATTACH_ICON = 'M12 5v14M5 12h14';
-const PHONE_ICON = 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2C9.5 21 3 14.5 3 6a2 2 0 0 1 2-2z';
-const PIN_ICON = 'M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z M12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z';
-const IMAGE_ICON = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4L15 13l5 5';
-const GRID_ICON = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z';
+const BACK = 'M15 5l-7 7 7 7';
+const PHONE =
+  'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z';
+const PHOTO_ICON = 'M4 4h16v16H4z M4 16l5-5 4 4 2-2 5 5 M15.5 9.5a1.5 1.5 0 1 0 0-.01';
+const PIN_ICON = 'M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21z M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z';
+const GRID_ICON = 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z';
+const PLANE_ICON = 'M22 2 11 13 M22 2l-7 20-4-9-9-4z';
 const TRASH_ICON = 'M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 10.5v6.5M13.5 10.5v6.5';
 const PERSON_X_ICON = 'M4 19c0-3.3 2.7-6 6-6s6 2.7 6 6M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM17 8l4 4M21 8l-4 4';
-const PLANE_BODY = 'M4 30 L60 8 L38 58 L30 36 Z';
 
-function timeLabel(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-}
+const REACTIONS_KEY = 'myspace.chatReactions.v1';
 
-function isToday(iso: string | null): boolean {
-  if (!iso) return false;
+const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }).toUpperCase();
+function dayLabel(iso: string) {
   const d = new Date(iso);
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
+  const today = new Date();
+  const y = new Date();
+  y.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'TODAY';
+  if (d.toDateString() === y.toDateString()) return 'YESTERDAY';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }).toUpperCase();
 }
+const STATUS: Record<string, string> = { thrown: 'Sent', landed: 'Delivered', read: 'Read' };
 
-/** One tappable row inside a bottom-sheet menu. */
-function SheetOption({
-  icon,
-  label,
-  destructive,
-  onPress,
-}: {
-  icon: string;
-  label: string;
-  destructive?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.sheetOption, pressed && styles.sheetOptionPressed]}>
-      <View style={[styles.sheetOptionIcon, destructive && styles.sheetOptionIconDestructive]}>
-        <Icon path={icon} color={destructive ? colors.danger : colors.textPrimary} size={17} strokeWidth={1.9} />
-      </View>
-      <Text style={[styles.sheetOptionLabel, destructive && styles.sheetOptionLabelDestructive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-/** The unlocked 1:1 conversation (MySpace Chats Throw handoff) — day/night themed, with the
- * paper-plane send flow (fly animation + client-side Thrown/Landed/Read status) and the accept
- * moment marked inline. */
-export function ChatThreadScreen() {
+export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: string) => void }) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { focusedFriend, messages, sendMessage, sendPhoto, sendLocation, goChats, removeFriend, clearChat, isOnline, isTyping, notifyTyping } = useFriends();
   const { startCall } = useCall();
   const { isDay } = useThrowColorMode();
+  const night = !isDay;
   const reduceMotion = useReducedMotion();
-  const [text, setText] = useState('');
-  const [sendingAttachment, setSendingAttachment] = useState(false);
-  const [attachError, setAttachError] = useState<string | null>(null);
-  const [optionsOpen, setOptionsOpen] = useState(false);
-  const [attachOpen, setAttachOpen] = useState(false);
-  const [mediaOpen, setMediaOpen] = useState(false);
-  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
-  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
-  const [letterDetail, setLetterDetail] = useState<DirectMessage | null>(null);
-  // Full text and photos for the Throw letters shown in this thread.
-  const letterDetails = useThrowDetails(messages.filter((x) => x.kind === 'letter').map((x) => x.throwId));
-  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-
   const { statusFor } = useMessageSendStatus(messages, user?.id, reduceMotion);
-  const { flying, flyThePlane, flyStyle } = useSendPlaneFly(reduceMotion);
+  const letterDetails = useThrowDetails(messages.filter((x) => x.kind === 'letter').map((x) => x.throwId));
+  const streak = useFriendStreak(user?.id, focusedFriend?.userId);
+
+  const [draft, setDraft] = useState('');
+  const [reply, setReply] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false);
+  const [tray, setTray] = useState(false);
+  const [picker, setPicker] = useState<string | null>(null);
+  const [reactions, setReactions] = useState<Record<string, string>>({});
+  const [toastMsg, setToastMsg] = useState<{ text: string; k: number } | null>(null);
+  const [sendNope, setSendNope] = useState(0);
+  const [launch, setLaunch] = useState(0);
+  const [flash, setFlash] = useState(0);
+  const [sendingAttachment, setSendingAttachment] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [catching, setCatching] = useState<{ letter: CatchLetter; read: boolean; throwId: string | null } | null>(null);
+  const [, bump] = useState(0);
+  const [flameTaps, setFlameTaps] = useState(0);
+  const [flameHearts, setFlameHearts] = useState<{ k: number; r: number }[]>([]);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialIds = useRef<Set<string> | null>(null);
+  if (initialIds.current === null) initialIds.current = new Set(messages.map((m) => m.id));
 
   useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
+    AsyncStorage.getItem(REACTIONS_KEY)
+      .then((raw) => raw && setReactions(JSON.parse(raw)))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
+    return () => clearTimeout(t);
   }, [messages.length]);
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
 
-  if (!focusedFriend) return null;
-
-  const submit = () => {
-    if (!text.trim()) return;
-    sendMessage(text);
-    setText('');
-    flyThePlane();
+  const toast = (text: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToastMsg({ text, k: Date.now() });
+    toastTimer.current = setTimeout(() => setToastMsg(null), 2000);
   };
 
-  const changeText = (next: string) => {
-    setText(next);
+  const theirTyping = focusedFriend ? isTyping(focusedFriend.connectionId) : false;
+  useEffect(() => {
+    if (theirTyping) scrollRef.current?.scrollToEnd({ animated: true });
+  }, [theirTyping]);
+
+  const rows = useMemo(() => {
+    const out: ({ kind: 'day'; key: string; label: string } | { kind: 'msg'; key: string; idx: number })[] = [];
+    let lastDay = '';
+    messages.forEach((m, idx) => {
+      const d = dayLabel(m.createdAt);
+      if (d !== lastDay) {
+        out.push({ kind: 'day', key: 'day-' + m.id, label: d });
+        lastDay = d;
+      }
+      out.push({ kind: 'msg', key: m.id, idx });
+    });
+    return out;
+  }, [messages]);
+
+  if (!focusedFriend) return null;
+  const first = focusedFriend.name.trim().split(/\s+/)[0] || focusedFriend.name;
+  const online = isOnline(focusedFriend.userId);
+
+  const setReaction = (id: string, r: string | null) => {
+    setPicker(null);
+    setReactions((prev) => {
+      const next = { ...prev };
+      if (r) next[id] = r;
+      else delete next[id];
+      AsyncStorage.setItem(REACTIONS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+
+  const send = () => {
+    const body = draft.trim();
+    if (!body) {
+      buzz();
+      setSendNope((n) => n + 1);
+      return;
+    }
+    buzz();
+    sendMessage(reply ? `${QUOTE_PREFIX}${reply.replace(/\n/g, ' ')}\n${body}` : body);
+    setDraft('');
+    setReply(null);
+    setLaunch((n) => n + 1);
+  };
+  const changeDraft = (next: string) => {
+    setDraft(next);
     if (next.trim()) notifyTyping(focusedFriend.connectionId);
   };
 
-  const theirTyping = isTyping(focusedFriend.connectionId);
-
-  const showFriendsChip = isToday(focusedFriend.acceptedAt);
-
-  const mediaItems = messages
-    .filter((m) => m.kind === 'image' && m.attachmentUrl)
-    .map((m) => ({ id: m.id, url: m.attachmentUrl!, senderId: m.senderId }))
-    .reverse();
-  const mediaSenderNameFor = (senderId: string) => (senderId === user?.id ? 'You' : focusedFriend.name);
-
   const pickPhoto = async () => {
-    setAttachOpen(false);
-    setAttachError(null);
+    setTray(false);
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setAttachError('Photo library access is needed to share a photo.');
-      return;
-    }
+    if (!permission.granted) return toast('Photo access is needed to share a photo');
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.7, allowsEditing: true });
     if (result.canceled || !result.assets[0]) return;
-
+    setFlash((n) => n + 1);
     setSendingAttachment(true);
     const { error } = await sendPhoto(result.assets[0].uri);
     setSendingAttachment(false);
-    if (error) setAttachError(error);
+    if (error) toast(error);
   };
-
   const shareLocation = async () => {
-    setAttachOpen(false);
-    setAttachError(null);
+    setTray(false);
     const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) {
-      setAttachError('Location access is needed to share where you are.');
-      return;
-    }
+    if (!permission.granted) return toast('Location access is needed to share where you are');
     setSendingAttachment(true);
     try {
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { error } = await sendLocation(position.coords.latitude, position.coords.longitude);
-      if (error) setAttachError(error);
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { error } = await sendLocation(pos.coords.latitude, pos.coords.longitude);
+      if (error) toast(error);
     } catch {
-      setAttachError('Could not get your location.');
+      toast('Could not get your location');
     } finally {
       setSendingAttachment(false);
     }
   };
-
-  const doClearChat = () => {
-    setConfirmClearOpen(false);
-    clearChat(focusedFriend.connectionId);
-  };
-
-  const doRemoveFriend = () => {
-    setConfirmRemoveOpen(false);
-    removeFriend(focusedFriend.connectionId);
-  };
-
   const startVideoCall = () => {
+    buzz();
     startCall({
       kind: 'dm',
       title: focusedFriend.name,
@@ -181,237 +227,398 @@ export function ChatThreadScreen() {
       contextId: focusedFriend.connectionId,
     });
   };
+  const throwLetter = () => {
+    setMenu(false);
+    onOpenThrow?.(focusedFriend.userId);
+  };
+  const tapFlame = () => {
+    buzz();
+    const n = flameTaps + 1;
+    setFlameTaps(n);
+    if (n % 4 === 0) {
+      setFlameHearts((h) => [...h, { k: n, r: Math.round(Math.random() * 30 - 15) }]);
+      toast(`${streak}-day streak with ${first} ♥`);
+      setTimeout(() => setFlameHearts([]), 1300);
+    }
+  };
 
-  const statusColor = STATUS_COLOR[isDay ? 'day' : 'night'];
-  const online = isOnline(focusedFriend.userId);
+  const mediaItems = messages
+    .filter((m) => m.kind === 'image' && m.attachmentUrl)
+    .map((m) => ({ id: m.id, url: m.attachmentUrl!, senderId: m.senderId }))
+    .reverse();
+
+  const hasText = !!draft.trim();
+  const showFlame = streak > 0 && !tray;
+  const bg = night ? ['#26331C', '#141C0E'] : ['#E3F0DF', '#F2F0E2'];
 
   return (
-    <LinearGradient
-      colors={(isDay ? colors.friendsChatCanvas : colors.chatsNightCanvas) as [string, string, ...string[]]}
-      locations={(isDay ? colors.friendsChatCanvasStops : colors.chatsNightCanvasStops) as [number, number, ...number[]]}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.screen}
-    >
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {isDay ? (
-        <GlassSurface tint="dark" tintColor="rgba(22,33,12,0.6)" style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-          <Pressable onPress={goChats} style={styles.headerIconBtnDay} accessibilityRole="button" accessibilityLabel="Back">
-            <Icon path={BACK_ICON} color="#fff" size={19} strokeWidth={2} />
+    <LinearGradient colors={bg as [string, string]} style={styles.screen}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* header */}
+        <View style={[styles.header, night && styles.headerNight, { paddingTop: insets.top + 8 }]}>
+          <Pressable onPress={goChats} accessibilityRole="button" accessibilityLabel="Back" style={({ pressed }) => [styles.headBtn, pressed && styles.pressedSmall]}>
+            <Svg width={18} height={18} viewBox="0 0 24 24">
+              <Path d={BACK} fill="none" stroke="#fff" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
           </Pressable>
-          <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} avatarUrl={focusedFriend.avatarUrl} />
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitleDay}>{focusedFriend.name}</Text>
-            {online && (
-              <View style={styles.presenceRow}>
-                <View style={styles.presenceDot} />
-                <Text style={styles.presenceTextDay}>Active now</Text>
-              </View>
-            )}
+          <Pressable
+            onPress={() => toast(`${focusedFriend.name}${focusedFriend.username ? ' · @' + focusedFriend.username : ''}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`${focusedFriend.name} profile`}
+            style={({ pressed }) => [styles.avatarWrap, pressed && { transform: [{ scale: 0.9 }, { rotate: '-8deg' }] }]}
+          >
+            <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} avatarUrl={focusedFriend.avatarUrl} />
+            {online ? <View style={styles.onlineDot} /> : null}
+          </Pressable>
+          <View style={styles.headText}>
+            <Text style={styles.headName} numberOfLines={1}>
+              {focusedFriend.name}
+            </Text>
+            <Text style={[styles.headStatus, theirTyping && { color: LIME }]}>{theirTyping ? 'typing…' : online ? 'online now' : 'offline'}</Text>
           </View>
-          <Pressable onPress={startVideoCall} style={styles.headerIconBtnDay} accessibilityRole="button" accessibilityLabel="Start video call">
-            <Icon path={PHONE_ICON} color="#FFFFFF" size={18} strokeWidth={1.8} />
+          <Pressable onPress={startVideoCall} accessibilityRole="button" accessibilityLabel="Start a call" style={({ pressed }) => [styles.headBtn, pressed && styles.pressedSmall]}>
+            <A style={anim(ctPhone(), 1.2, 2, 'ease-in-out')}>
+              <Svg width={19} height={19} viewBox="0 0 24 24">
+                <Path d={PHONE} fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </A>
           </Pressable>
-          <Pressable onPress={() => setOptionsOpen(true)} style={styles.headerIconBtnDay} accessibilityRole="button" accessibilityLabel="More options">
-            <OverflowIcon size={19} color="#FFFFFF" />
-          </Pressable>
-        </GlassSurface>
-      ) : (
-        <View style={[styles.headerNight, { paddingTop: insets.top + spacing.md }]}>
-          <Pressable onPress={goChats} style={styles.headerIconBtnNight} accessibilityRole="button" accessibilityLabel="Back">
-            <Icon path={BACK_ICON} color={colors.pale} size={19} strokeWidth={2} />
-          </Pressable>
-          <FriendAvatar userId={focusedFriend.userId} name={focusedFriend.name} size={44} avatarUrl={focusedFriend.avatarUrl} />
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitleNight}>{focusedFriend.name}</Text>
-            {online && <Text style={styles.presenceTextNight}>Active now</Text>}
-          </View>
-          <Pressable onPress={startVideoCall} style={styles.headerIconBtnNight} accessibilityRole="button" accessibilityLabel="Start video call">
-            <Icon path={PHONE_ICON} color={colors.pale} size={18} strokeWidth={1.8} />
-          </Pressable>
-          <Pressable onPress={() => setOptionsOpen(true)} style={styles.headerIconBtnNight} accessibilityRole="button" accessibilityLabel="More options">
-            <Svg width={17} height={17} viewBox="0 0 64 64">
-              <Path d={PLANE_BODY} fill="none" stroke={colors.lime} strokeWidth={5} strokeLinejoin="round" />
+          <Pressable
+            onPress={() => setMenu((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel="More options"
+            style={({ pressed }) => [styles.headBtn, menu && { backgroundColor: 'rgba(255,255,255,.3)' }, pressed && styles.pressedSmall]}
+          >
+            <Svg width={18} height={18} viewBox="0 0 24 24">
+              <Circle cx={12} cy={5} r={2} fill="#fff" />
+              <Circle cx={12} cy={12} r={2} fill="#fff" />
+              <Circle cx={12} cy={19} r={2} fill="#fff" />
             </Svg>
           </Pressable>
         </View>
-      )}
 
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {showFriendsChip && (
-          <View style={[styles.systemChip, !isDay && styles.systemChipNight]}>
-            <Icon path={CHECK_ICON} color={isDay ? colors.ink55 : colors.pale} size={14} strokeWidth={2.2} />
-            <Text style={[styles.systemChipText, !isDay && styles.systemChipTextNight]}>You're friends since today</Text>
-          </View>
-        )}
-        {messages.length === 0 ? (
-          <Text style={[styles.emptyNote, !isDay && styles.emptyNoteNight]}>No messages yet. Say hi.</Text>
-        ) : (
-        <View style={styles.bubbleStack}>
-          {messages.map((m) => {
-            if (m.kind === 'system') {
-              return (
-                <AnimatedMessageWrap key={m.id} reduceMotion={reduceMotion} style={[styles.systemChip, !isDay && styles.systemChipNight]}>
-                  <Text style={[styles.systemChipText, !isDay && styles.systemChipTextNight]}>{m.text}</Text>
-                </AnimatedMessageWrap>
-              );
-            }
-            const mine = m.senderId === user?.id;
+        {/* messages */}
+        <View style={styles.flex}>
+          <ScrollView
+            ref={scrollRef}
+            style={styles.flex}
+            contentContainerStyle={[styles.list, { paddingBottom: showFlame ? 84 : 16 }]}
+            showsVerticalScrollIndicator={false}
+            onScrollBeginDrag={() => picker && setPicker(null)}
+            keyboardShouldPersistTaps="handled"
+          >
+            {picker ? <Pressable style={StyleSheet.absoluteFill} onPress={() => setPicker(null)} accessibilityLabel="Close reactions" /> : null}
+            {messages.length === 0 ? <Text style={[styles.empty, night && { color: 'rgba(255,255,255,.6)' }]}>No messages yet. Say hi.</Text> : null}
+            {rows.map((row) => {
+              if (row.kind === 'day') {
+                return (
+                  <View key={row.key} style={[styles.dayChip, night && styles.dayChipNight]}>
+                    <Text style={mono(10.5, night ? 'rgba(255,255,255,.75)' : INK, 1.4)}>{row.label}</Text>
+                  </View>
+                );
+              }
+              const m = messages[row.idx];
+              const prev = messages[row.idx - 1];
+              const next = messages[row.idx + 1];
+              const mine = m.senderId === user?.id;
+              const isNew = !initialIds.current!.has(m.id);
+              const mt = !prev ? 0 : prev.senderId !== m.senderId ? 14 : m.kind === 'letter' ? 10 : 2;
+              const order = Math.max(0, row.idx - (messages.length - 12));
+              const calm = reduceMotion ? null : anim(ctIn(), 0.45, Math.min(order * 0.05, 0.6), 'ease-out');
 
-            if (m.kind === 'letter') {
+              if (m.kind === 'system') {
+                return (
+                  <View key={m.id} style={[styles.dayChip, night && styles.dayChipNight, { marginTop: 8 }]}>
+                    <Text style={mono(10.5, night ? 'rgba(255,255,255,.75)' : INK, 0.6)}>{m.text}</Text>
+                  </View>
+                );
+              }
+              if (m.kind === 'letter') {
+                const detail = m.throwId ? letterDetails[m.throwId] : undefined;
+                const opened = !!detail?.readAt;
+                const entrance = reduceMotion ? null : isNew ? anim(mine ? ctThrowMine() : ctThrowIn(), mine ? 0.8 : 0.9, 0, SPRING) : calm;
+                return (
+                  <View key={m.id} style={{ marginTop: mt }}>
+                    <LetterPlane
+                      mine={mine}
+                      night={night}
+                      hint={mine ? (opened ? 'Opened' : 'Delivered · unopened') : opened ? 'Opened' : 'Unopened'}
+                      hintGreen={opened && mine}
+                      time={timeLabel(m.createdAt)}
+                      entrance={entrance}
+                      onPress={() => {
+                        buzz();
+                        setCatching({
+                          read: mine || opened,
+                          throwId: m.throwId ?? null,
+                          letter: { id: m.id, mine, friendName: focusedFriend.name, city: m.attachmentUrl, time: timeLabel(m.createdAt), text: detail?.messageText?.trim() || m.text, media: detail?.media ?? [] },
+                        });
+                      }}
+                    />
+                  </View>
+                );
+              }
+
+              const status = statusFor(m.id, m.senderId);
+              const showMeta = !next || next.senderId !== m.senderId || next.kind === 'letter' || next.kind === 'system';
+              const entrance = reduceMotion ? null : isNew ? anim(mine ? ctMine() : ctTheirs(), 0.45, 0, SPRING) : calm;
               return (
-                <AnimatedMessageWrap key={m.id} reduceMotion={reduceMotion} style={styles.letterWrap}>
-                  <Text style={[styles.senderName, !isDay && styles.senderNameNight]}>{mine ? 'You' : focusedFriend.name} threw a letter</Text>
-                  <LetterThrownCard
-                    title={m.text}
-                    place={m.attachmentUrl}
-                    toLabel={mine ? focusedFriend.name : 'You'}
-                    timeLabel={timeLabel(m.createdAt)}
-                    onBreakSeal={() => setLetterDetail(m)}
-                    body={m.throwId ? letterDetails[m.throwId]?.messageText : null}
-                    media={m.throwId ? letterDetails[m.throwId]?.media : undefined}
-                    sealId={mine ? undefined : m.id}
-                    senderName={focusedFriend.name}
+                <View key={m.id} style={[{ marginTop: mt, alignItems: mine ? 'flex-end' : 'flex-start', gap: 4 }, picker === m.id && { zIndex: 10 }]}>
+                  <ChatBubble
+                    mine={mine}
+                    night={night}
+                    kind={m.kind === 'image' ? 'image' : m.kind === 'location' ? 'location' : 'text'}
+                    text={m.text}
+                    attachmentUrl={m.attachmentUrl}
+                    reaction={reactions[m.id] ?? null}
+                    pickerOpen={picker === m.id}
+                    entrance={entrance}
+                    onReact={(r) => setReaction(m.id, r)}
+                    onOpenPicker={() => setPicker(m.id)}
+                    onReply={(q) => setReply(q)}
+                    onOpenPhoto={setPhoto}
                   />
-                </AnimatedMessageWrap>
-              );
-            }
-
-            const status = statusFor(m.id, m.senderId);
-            return (
-              <AnimatedMessageWrap key={m.id} reduceMotion={reduceMotion} style={[styles.msgWrap, mine ? styles.msgWrapMine : styles.msgWrapTheirs]}>
-                {m.kind === 'image' && m.attachmentUrl ? (
-                  <Image source={{ uri: m.attachmentUrl }} style={styles.imageBubble} resizeMode="cover" />
-                ) : m.kind === 'location' && m.attachmentUrl ? (
-                  <Pressable
-                    onPress={() => Linking.openURL(m.attachmentUrl!)}
-                    style={[styles.bubble, styles.locationBubble, mine ? styles.bubbleMine : isDay ? styles.bubbleTheirsDay : styles.bubbleTheirsNight]}
-                  >
-                    <View style={styles.locationIcon}>
-                      <Icon path={PIN_ICON} color={mine ? colors.ink : colors.lime} size={16} strokeWidth={1.8} />
+                  {showMeta ? (
+                    <View style={styles.meta}>
+                      <Text style={mono(11.5, night ? 'rgba(255,255,255,.5)' : 'rgba(17,17,17,.6)', 0)}>{timeLabel(m.createdAt)}</Text>
+                      {mine && status ? (
+                        <>
+                          <Text style={mono(11.5, night ? 'rgba(255,255,255,.5)' : 'rgba(17,17,17,.6)', 0)}>·</Text>
+                          <Svg width={12} height={12} viewBox="0 0 24 24">
+                            <Path d={SEND_PATH} fill={status === 'read' ? READ_GREEN : 'rgba(17,17,17,.5)'} />
+                          </Svg>
+                          <Text style={[mono(11.5, status === 'read' ? READ_GREEN : 'rgba(17,17,17,.5)', 0), { fontFamily: 'SpaceMono_700Bold' }]}>{STATUS[status]}</Text>
+                        </>
+                      ) : null}
                     </View>
-                    <Text style={[styles.locationText, mine ? styles.bubbleTextMine : isDay ? styles.bubbleTextDay : styles.bubbleTextNight]}>Location shared · Open in Maps</Text>
-                  </Pressable>
-                ) : mine ? (
-                  <View style={[styles.bubble, styles.bubbleMine]}>
-                    <Text style={styles.bubbleTextMine}>{m.text}</Text>
-                  </View>
-                ) : isDay ? (
-                  <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={[styles.bubble, styles.bubbleTheirsDay]}>
-                    <Text style={styles.bubbleTextDay}>{m.text}</Text>
-                  </GlassSurface>
-                ) : (
-                  <View style={[styles.bubble, styles.bubbleTheirsNight]}>
-                    <Text style={styles.bubbleTextNight}>{m.text}</Text>
-                  </View>
-                )}
-                {mine && status ? (
-                  <View style={styles.metaRow}>
-                    <Text style={[styles.meta, styles.metaMine, { color: isDay ? colors.ink50 : 'rgba(237,253,255,0.45)' }]}>{timeLabel(m.createdAt)} ·</Text>
-                    <PlaneGlyph size={11} bodyFill={statusColor[status]} />
-                    <Text style={[styles.statusText, { color: statusColor[status] }]}>{STATUS_LABEL[status]}</Text>
-                  </View>
-                ) : (
-                  <Text style={[styles.meta, isDay ? styles.metaTheirsDay : styles.metaTheirsNight]}>{timeLabel(m.createdAt)}</Text>
-                )}
-              </AnimatedMessageWrap>
-            );
-          })}
-          {sendingAttachment && (
-            <View style={[styles.msgWrap, styles.msgWrapMine]}>
-              <View style={[styles.bubble, styles.bubbleMine, styles.sendingBubble]}>
-                <ActivityIndicator size="small" color={colors.ink} />
-              </View>
-            </View>
-          )}
-          {theirTyping && (
-            <View style={[styles.msgWrap, styles.msgWrapTheirs]}>
-              {isDay ? (
-                <GlassSurface tint="light" tintColor="rgba(255,255,255,0.6)" style={styles.typingBubble}>
-                  <TypingDots color={colors.ink} reduceMotion={reduceMotion} />
-                </GlassSurface>
-              ) : (
-                <View style={[styles.typingBubble, styles.typingBubbleNight]}>
-                  <TypingDots color={colors.pale} reduceMotion={reduceMotion} />
+                  ) : null}
                 </View>
-              )}
-            </View>
-          )}
+              );
+            })}
+            {sendingAttachment ? (
+              <View style={[styles.typing, { alignSelf: 'flex-end', backgroundColor: LIME, borderWidth: 0 }]}>
+                <ActivityIndicator size="small" color={INK} />
+              </View>
+            ) : null}
+            {theirTyping ? (
+              <A style={[styles.typing, night && styles.typingNight, anim(ctTheirs(), 0.3, 0, 'ease-out')]}>
+                {[0, 0.15, 0.3].map((d) => (
+                  <A key={d} style={[styles.typingDot, loop(ctDots(), 1, d, 'ease-in-out')]} />
+                ))}
+              </A>
+            ) : null}
+          </ScrollView>
+
+          {/* streak flame */}
+          {showFlame ? (
+            <Pressable onPress={tapFlame} accessibilityRole="button" accessibilityLabel={`${streak} day streak with ${first}`} style={({ pressed }) => [styles.flame, pressed && { transform: [{ scale: 0.94 }] }]}>
+              <View style={{ width: 46, height: 60, alignItems: 'center', justifyContent: 'flex-end' }}>
+                <RealFlame size={58} />
+                {flameHearts.map((h) => (
+                  <A key={h.k} pointerEvents="none" style={[{ position: 'absolute', left: 12, bottom: 46 }, anim(ctHeartUp(h.r, 1), 1.2, 0, 'ease-out')]}>
+                    <Heart size={22} />
+                  </A>
+                ))}
+              </View>
+              <View style={{ paddingBottom: 4 }}>
+                <A key={flameTaps} style={flameTaps ? anim(ctStreak(flameTaps % 2 ? 'A' : 'B'), 0.4, 0, 'ease-out') : null}>
+                  <Text style={[styles.streakNum, night && { color: '#F2F4EC' }]}>{streak}</Text>
+                </A>
+                <Text style={mono(9.5, night ? 'rgba(255,255,255,.55)' : 'rgba(17,17,17,.5)', 1.2)}>DAY STREAK</Text>
+              </View>
+            </Pressable>
+          ) : null}
         </View>
-        )}
-      </ScrollView>
 
-      {attachError && <Text style={styles.attachError}>{attachError}</Text>}
+        {/* reply bar */}
+        {reply ? (
+          <A style={[styles.replyBar, anim(ctTray(), 0.3, 0, 'ease-out')]}>
+            <View style={styles.replyBody}>
+              <Text style={mono(10, '#2440C8', 1)}>REPLYING TO {first.toUpperCase()}</Text>
+              <Text style={styles.replyText} numberOfLines={1}>
+                {splitQuote(reply).body}
+              </Text>
+            </View>
+            <Pressable onPress={() => setReply(null)} accessibilityRole="button" accessibilityLabel="Cancel reply" style={styles.replyX}>
+              <Svg width={11} height={11} viewBox="0 0 24 24">
+                <Path d="M6 6l12 12 M18 6 6 18" fill="none" stroke={INK} strokeWidth={3.5} strokeLinecap="round" />
+              </Svg>
+            </Pressable>
+          </A>
+        ) : null}
 
-      <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        {isDay ? (
-          <GlassSurface tint="light" tintColor="rgba(255,255,255,0.65)" style={styles.composer}>
-            <Pressable onPress={() => setAttachOpen(true)} style={styles.attachButton} accessibilityRole="button" accessibilityLabel="Share a photo or your location">
-              <Icon path={ATTACH_ICON} color={colors.textMuted} size={21} strokeWidth={1.8} />
-            </Pressable>
-            <TextInput
-              value={text}
-              onChangeText={changeText}
-              placeholder={`Message ${focusedFriend.name.split(' ')[0]}…`}
-              placeholderTextColor={colors.textDisabled}
-              style={[styles.input, noOutline]}
-              onSubmitEditing={submit}
-              returnKeyType="send"
-            />
-            <Pressable onPress={submit} style={styles.sendButtonDay} accessibilityRole="button" accessibilityLabel="Send">
-              <PlaneGlyph size={19} bodyFill={colors.lime} wingFill="#8FB52E" />
-            </Pressable>
-          </GlassSurface>
-        ) : (
-          <View style={styles.composerNight}>
-            <Pressable onPress={() => setAttachOpen(true)} style={styles.attachButton} accessibilityRole="button" accessibilityLabel="Share a photo or your location">
-              <Icon path={ATTACH_ICON} color="rgba(237,253,255,0.6)" size={21} strokeWidth={1.8} />
-            </Pressable>
-            <TextInput
-              value={text}
-              onChangeText={changeText}
-              placeholder={`Message ${focusedFriend.name.split(' ')[0]}…`}
-              placeholderTextColor="rgba(237,253,255,0.4)"
-              style={[styles.input, styles.inputNight, noOutline]}
-              onSubmitEditing={submit}
-              returnKeyType="send"
-            />
-            <Pressable onPress={submit} style={styles.sendButtonNight} accessibilityRole="button" accessibilityLabel="Send">
-              <PlaneGlyph size={20} bodyFill={colors.ink} wingFill="#3B5222" />
-            </Pressable>
-          </View>
-        )}
-        {flying && (
-          <Animated.View pointerEvents="none" style={[styles.flyingPlane, flyStyle]}>
-            <PlaneGlyph size={26} bodyFill={colors.lime} wingFill="#8FB52E" />
-          </Animated.View>
-        )}
-      </View>
+        {/* composer */}
+        <A
+          key={'jig' + sendNope}
+          style={[styles.composer, night && styles.composerNight, { marginBottom: Math.max(insets.bottom, 14) }, sendNope ? anim(ctJig(sendNope % 2 ? 'A' : 'B'), 0.4, 0, 'ease-out') : null]}
+        >
+          <Pressable
+            onPress={() => {
+              buzz();
+              setTray((v) => !v);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Share a photo, your location or media"
+            style={styles.plusBtn}
+          >
+            <View style={[{ transform: [{ rotate: tray ? '135deg' : '0deg' }] }, styles.plusSpin]}>
+              <Svg width={22} height={22} viewBox="0 0 24 24">
+                <Path d="M12 5v14 M5 12h14" fill="none" stroke={night ? '#F2F4EC' : INK} strokeWidth={2.2} strokeLinecap="round" />
+              </Svg>
+            </View>
+          </Pressable>
+          <TextInput
+            value={draft}
+            onChangeText={changeDraft}
+            placeholder={`Message ${first}…`}
+            placeholderTextColor={night ? 'rgba(255,255,255,.4)' : 'rgba(17,17,17,.4)'}
+            style={[styles.input, night && { color: '#F2F4EC' }, noOutline]}
+            onSubmitEditing={send}
+            returnKeyType="send"
+          />
+          <Pressable
+            onPress={send}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            style={({ pressed }) => [styles.sendBtn, { backgroundColor: hasText ? LIME : '#1C2414', transform: [{ scale: pressed ? 0.85 : hasText ? 1.06 : 1 }, { rotate: pressed ? '-15deg' : '0deg' }] }]}
+          >
+            <View style={{ transform: [{ rotate: '45deg' }, { translateX: -1 }, { translateY: 1 }] }}>
+              <Svg width={20} height={20} viewBox="0 0 24 24">
+                <Path d={SEND_PATH} fill={hasText ? '#1C2414' : LIME} />
+              </Svg>
+            </View>
+            {launch ? (
+              <A key={launch} pointerEvents="none" style={[{ position: 'absolute', left: 13, top: 13 }, anim(ctSendFly(), 0.7, 0, 'ease-in-out')]}>
+                <Svg width={22} height={22} viewBox="0 0 24 24">
+                  <Path d={SEND_PATH} fill={LIME} stroke={INK} strokeWidth={1.2} />
+                </Svg>
+              </A>
+            ) : null}
+          </Pressable>
+        </A>
+      </KeyboardAvoidingView>
 
-      <BottomSheet visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
-        <Text style={styles.sheetTitle}>{focusedFriend.name}</Text>
-        <SheetOption icon={TRASH_ICON} label="Delete chat" onPress={() => { setOptionsOpen(false); setConfirmClearOpen(true); }} />
-        <SheetOption
-          icon={PERSON_X_ICON}
-          label="Remove friend"
-          destructive
-          onPress={() => { setOptionsOpen(false); setConfirmRemoveOpen(true); }}
-        />
-      </BottomSheet>
+      {/* + tray */}
+      {tray ? (
+        <>
+          <Pressable style={[StyleSheet.absoluteFill, { zIndex: 8 }]} onPress={() => setTray(false)} accessibilityLabel="Close menu" />
+          <A style={[styles.tray, { bottom: Math.max(insets.bottom, 14) + 74 }, anim(ctTrayPop(), 0.32, 0, SPRING)]}>
+            {(
+              [
+                ['Photo', PHOTO_ICON, pickPhoto],
+                ['Current location', PIN_ICON, shareLocation],
+                [
+                  'Media',
+                  GRID_ICON,
+                  () => {
+                    setTray(false);
+                    setMediaOpen(true);
+                  },
+                ],
+              ] as [string, string, () => void][]
+            ).map(([label, icon, go], i) => (
+              <A key={label} style={anim(ctTray(), 0.3, 0.04 + i * 0.05, SPRING)}>
+                <Pressable
+                  onPress={() => {
+                    buzz();
+                    go();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                  style={({ pressed }) => [styles.trayRow, pressed && { backgroundColor: '#F6F6F4', transform: [{ scale: 0.97 }] }]}
+                >
+                  <View style={styles.trayIcon}>
+                    <Svg width={22} height={22} viewBox="0 0 24 24">
+                      <Path d={icon} fill="none" stroke="#1C2414" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                  </View>
+                  <Text style={styles.trayLabel}>{label}</Text>
+                </Pressable>
+              </A>
+            ))}
+          </A>
+        </>
+      ) : null}
 
-      <BottomSheet visible={attachOpen} onClose={() => setAttachOpen(false)}>
-        <Text style={styles.sheetTitle}>Share</Text>
-        <SheetOption icon={IMAGE_ICON} label="Photo" onPress={pickPhoto} />
-        <SheetOption icon={PIN_ICON} label="Current location" onPress={shareLocation} />
-        <SheetOption
-          icon={GRID_ICON}
-          label="Media"
-          onPress={() => {
-            setAttachOpen(false);
-            setMediaOpen(true);
+      {/* ⋮ menu */}
+      {menu ? (
+        <>
+          <Pressable style={[StyleSheet.absoluteFill, { zIndex: 11 }]} onPress={() => setMenu(false)} accessibilityLabel="Close menu" />
+          <A style={[styles.menu, { top: insets.top + 64 }, anim(ctPicker(), 0.25, 0, SPRING)]}>
+            {(
+              [
+                ['Throw a letter', PLANE_ICON, throwLetter, false],
+                [
+                  'Media',
+                  GRID_ICON,
+                  () => {
+                    setMenu(false);
+                    setMediaOpen(true);
+                  },
+                  false,
+                ],
+                [
+                  'Delete chat',
+                  TRASH_ICON,
+                  () => {
+                    setMenu(false);
+                    setConfirmClear(true);
+                  },
+                  false,
+                ],
+                [
+                  'Remove friend',
+                  PERSON_X_ICON,
+                  () => {
+                    setMenu(false);
+                    setConfirmRemove(true);
+                  },
+                  true,
+                ],
+              ] as [string, string, () => void, boolean][]
+            ).map(([label, icon, go, danger]) => (
+              <Pressable key={label} onPress={go} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [styles.menuRow, pressed && { backgroundColor: 'rgba(17,17,17,.06)' }]}>
+                <Svg width={17} height={17} viewBox="0 0 24 24">
+                  <Path d={icon} fill="none" stroke={danger ? '#E0452B' : INK} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={[styles.menuText, danger && { color: '#E0452B' }]}>{label}</Text>
+              </Pressable>
+            ))}
+          </A>
+        </>
+      ) : null}
+
+      {catching ? (
+        <CatchLetterOverlay
+          letter={catching.letter}
+          startRead={catching.read}
+          topInset={insets.top}
+          toast={toast}
+          onClose={() => setCatching(null)}
+          onUnfolded={() => {
+            if (catching.throwId) {
+              markLetterOpened(catching.throwId).then(() => bump((n) => n + 1));
+              bump((n) => n + 1);
+            }
+          }}
+          onWriteBack={() => {
+            setCatching(null);
+            onOpenThrow?.(focusedFriend.userId);
           }}
         />
-      </BottomSheet>
+      ) : null}
+
+      {photo ? (
+        <Pressable onPress={() => setPhoto(null)} accessibilityRole="button" accessibilityLabel="Close photo" style={[StyleSheet.absoluteFill, styles.lightbox]}>
+          <A style={[styles.lightboxCard, anim(ctPop('B'), 0.4, 0, SPRING)]}>
+            <Image source={{ uri: photo }} style={{ width: '100%', height: 300 }} resizeMode="cover" />
+          </A>
+          <Text style={mono(11, 'rgba(255,255,255,.7)', 1.4)}>TAP ANYWHERE TO CLOSE</Text>
+        </Pressable>
+      ) : null}
+
+      {flash ? <A key={flash} pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 40, backgroundColor: '#fff' }, anim(ctFlash(), 0.4, 0, 'ease-out')]} /> : null}
+      {toastMsg ? <Toast key={toastMsg.k} text={toastMsg.text} top={insets.top + 76} /> : null}
 
       <MediaGalleryModal
         visible={mediaOpen}
@@ -419,521 +626,103 @@ export function ChatThreadScreen() {
         title="Media"
         bannerCaption={focusedFriend.name}
         items={mediaItems}
-        senderNameFor={mediaSenderNameFor}
+        senderNameFor={(id: string) => (id === user?.id ? 'You' : focusedFriend.name)}
       />
-
-      <BottomSheet visible={confirmClearOpen} onClose={() => setConfirmClearOpen(false)}>
+      <BottomSheet visible={confirmClear} onClose={() => setConfirmClear(false)}>
         <Text style={styles.sheetTitle}>Delete chat</Text>
         <Text style={styles.sheetBody}>Delete every message with {focusedFriend.name}? This can't be undone.</Text>
         <View style={styles.sheetActions}>
-          <View style={styles.sheetActionFlex}>
-            <ActionButton label="Cancel" variant="secondary" onPress={() => setConfirmClearOpen(false)} />
+          <View style={styles.flex}>
+            <ActionButton label="Cancel" variant="secondary" onPress={() => setConfirmClear(false)} />
           </View>
-          <View style={styles.sheetActionFlex}>
-            <ActionButton label="Delete chat" variant="destructive" onPress={doClearChat} />
+          <View style={styles.flex}>
+            <ActionButton
+              label="Delete chat"
+              variant="destructive"
+              onPress={() => {
+                setConfirmClear(false);
+                clearChat(focusedFriend.connectionId);
+              }}
+            />
           </View>
         </View>
       </BottomSheet>
-
-      <BottomSheet visible={confirmRemoveOpen} onClose={() => setConfirmRemoveOpen(false)}>
+      <BottomSheet visible={confirmRemove} onClose={() => setConfirmRemove(false)}>
         <Text style={styles.sheetTitle}>Remove friend</Text>
         <Text style={styles.sheetBody}>Remove {focusedFriend.name}? This deletes your chat history too.</Text>
         <View style={styles.sheetActions}>
-          <View style={styles.sheetActionFlex}>
-            <ActionButton label="Cancel" variant="secondary" onPress={() => setConfirmRemoveOpen(false)} />
+          <View style={styles.flex}>
+            <ActionButton label="Cancel" variant="secondary" onPress={() => setConfirmRemove(false)} />
           </View>
-          <View style={styles.sheetActionFlex}>
-            <ActionButton label="Remove" variant="destructive" onPress={doRemoveFriend} />
+          <View style={styles.flex}>
+            <ActionButton
+              label="Remove"
+              variant="destructive"
+              onPress={() => {
+                setConfirmRemove(false);
+                removeFriend(focusedFriend.connectionId);
+              }}
+            />
           </View>
         </View>
       </BottomSheet>
-
-      <BottomSheet visible={!!letterDetail} onClose={() => setLetterDetail(null)}>
-        {letterDetail && (
-          <View style={styles.letterDetail}>
-            <Text style={styles.letterDetailKicker}>
-              PAR AVION · FROM {(letterDetail.senderId === user?.id ? 'You' : focusedFriend.name).toUpperCase()}
-            </Text>
-            <Text style={styles.letterDetailTitle}>{(letterDetail.throwId && letterDetails[letterDetail.throwId]?.messageText?.trim()) || letterDetail.text}</Text>
-            {letterDetail.attachmentUrl && <Text style={styles.letterDetailPlace}>{letterDetail.attachmentUrl}</Text>}
-            <Text style={styles.letterDetailTime}>Thrown {timeLabel(letterDetail.createdAt)}</Text>
-            <ActionButton label="Close" variant="secondary" onPress={() => setLetterDetail(null)} />
-          </View>
-        )}
-      </BottomSheet>
-    </KeyboardAvoidingView>
     </LinearGradient>
   );
 }
 
-/** The handoff's msDot bounce — each dot rises -3px and brightens on a staggered 1s loop. */
-function TypingDots({ color, reduceMotion }: { color: string; reduceMotion: boolean }) {
-  const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
-  useEffect(() => {
-    if (reduceMotion) return;
-    const loops = dots.map((v, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 150),
-          Animated.timing(v, { toValue: 1, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(v, { toValue: 0, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        ]),
-      ),
-    );
-    loops.forEach((l) => l.start());
-    return () => loops.forEach((l) => l.stop());
-  }, [reduceMotion]);
-
-  return (
-    <>
-      {dots.map((v, i) => (
-        <Animated.View
-          key={i}
-          style={[
-            styles.typingDot,
-            {
-              backgroundColor: color,
-              opacity: reduceMotion ? 0.6 : v.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
-              transform: [{ translateY: reduceMotion ? 0 : v.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
-            },
-          ]}
-        />
-      ))}
-    </>
-  );
-}
-
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  flex: {
-    flex: 1,
-  },
+  screen: { flex: 1 },
+  flex: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    paddingHorizontal: 22,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    shadowColor: colors.lime,
-    shadowOpacity: 0.22,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 18,
-    elevation: 3,
-  },
-  headerNight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    paddingHorizontal: 20,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    backgroundColor: 'rgba(237,253,255,0.05)',
-    borderBottomWidth: 1,
-    borderColor: 'rgba(237,253,255,0.08)',
-  },
-  headerIconBtnDay: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.onInkBtn,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerIconBtnNight: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(237,253,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerText: {
-    flex: 1,
-    gap: 2,
-  },
-  headerTitleDay: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 16.5,
-    color: '#fff',
-  },
-  headerTitleNight: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 16.5,
-    color: colors.pale,
-  },
-  presenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  presenceDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: colors.onlineDotOnInk,
-  },
-  presenceTextDay: {
-    fontFamily: fontFamily.sans400,
-    fontSize: 12,
-    color: colors.onInk60,
-  },
-  presenceTextNight: {
-    marginTop: 2,
-    fontFamily: fontFamily.sans400,
-    fontSize: 12,
-    color: 'rgba(237,253,255,0.55)',
-  },
-  scroll: {
-    paddingHorizontal: 22,
-    paddingTop: 18,
-    paddingBottom: spacing.md,
-  },
-  systemChip: {
-    alignSelf: 'center',
+    zIndex: 10,
+    backgroundColor: OLIVE,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    boxShadow: '0 6px 18px rgba(30,40,20,.25)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: colors.ink06,
-    borderRadius: radius.pill,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-  },
-  systemChipNight: {
-    backgroundColor: 'rgba(237,253,255,0.06)',
-  },
-  systemChipText: {
-    fontFamily: fontFamily.sans500,
-    fontSize: 12,
-    color: colors.ink55,
-  },
-  systemChipTextNight: {
-    color: 'rgba(237,253,255,0.6)',
-  },
-  emptyNote: {
-    marginTop: spacing.xxl,
-    textAlign: 'center',
-    fontFamily: fontFamily.sans400,
-    fontSize: 13.5,
-    color: colors.textSecondary,
-  },
-  emptyNoteNight: {
-    color: 'rgba(237,253,255,0.5)',
-  },
-  bubbleStack: {
-    marginTop: 18,
-    gap: 9,
-  },
-  letterWrap: {
-    alignSelf: 'flex-start',
-    maxWidth: '86%',
-    gap: 4,
-  },
-  senderName: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 12,
-    paddingLeft: 6,
-    color: '#2346C8',
-  },
-  senderNameNight: {
-    color: colors.lime,
-  },
-  msgWrap: {
-    maxWidth: '78%',
-  },
-  msgWrapMine: {
-    alignSelf: 'flex-end',
-    alignItems: 'flex-end',
-  },
-  msgWrapTheirs: {
-    alignSelf: 'flex-start',
-    alignItems: 'flex-start',
-  },
-  bubble: {
-    paddingVertical: 13,
-    paddingHorizontal: 17,
-    borderRadius: 22,
-  },
-  bubbleMine: {
-    backgroundColor: colors.lime,
-    borderBottomRightRadius: 7,
-    shadowColor: '#7AA82C',
-    shadowOpacity: 0.28,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  bubbleTheirsDay: {
-    borderBottomLeftRadius: 7,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 10,
-    elevation: 1,
-  },
-  bubbleTheirsNight: {
-    borderBottomLeftRadius: 7,
-    backgroundColor: 'rgba(237,253,255,0.09)',
-    borderWidth: 1,
-    borderColor: 'rgba(237,253,255,0.07)',
-  },
-  bubbleTextDay: {
-    fontFamily: fontFamily.sans400,
-    fontSize: 15,
-    lineHeight: 21,
-    color: colors.textPrimary,
-  },
-  bubbleTextNight: {
-    fontFamily: fontFamily.sans400,
-    fontSize: 15,
-    lineHeight: 21,
-    color: colors.pale,
-  },
-  bubbleTextMine: {
-    fontFamily: fontFamily.sans400,
-    fontSize: 15,
-    lineHeight: 21,
-    color: colors.ink,
-  },
-  sendingBubble: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-  },
-  imageBubble: {
-    width: 220,
-    height: 220,
-    borderRadius: 20,
-    backgroundColor: colors.badgeInactiveBg,
-  },
-  locationBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  locationIcon: {
-    width: 26,
-    height: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationText: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 13.5,
-  },
-  meta: {
-    marginTop: 6,
-    fontFamily: fontFamily.mono500,
-    fontSize: 10.5,
-  },
-  metaTheirsDay: {
-    color: colors.textDisabled,
-  },
-  metaTheirsNight: {
-    color: 'rgba(237,253,255,0.4)',
-  },
-  metaMine: {
-    marginTop: 0,
-  },
-  metaRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  statusText: {
-    fontFamily: fontFamily.mono500,
-    fontSize: 10.5,
-    letterSpacing: 0.3,
-  },
-  typingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 22,
-    borderBottomLeftRadius: 7,
-    paddingVertical: 15,
-    paddingHorizontal: 17,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 10,
-    elevation: 1,
-  },
-  typingBubbleNight: {
-    backgroundColor: 'rgba(237,253,255,0.09)',
-    borderColor: 'rgba(237,253,255,0.07)',
-  },
-  typingDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  letterDetail: {
-    gap: spacing.ms,
-    paddingTop: spacing.xs,
-  },
-  letterDetailKicker: {
-    fontFamily: fontFamily.mono500,
-    fontSize: 10,
-    letterSpacing: 1,
-    color: colors.textFaint,
-  },
-  letterDetailTitle: {
-    fontFamily: 'Caveat_700Bold',
-    fontSize: 36,
-    lineHeight: 38,
-    color: '#2346C8',
-  },
-  letterDetailPlace: {
-    fontFamily: fontFamily.mono500,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  letterDetailTime: {
-    fontFamily: fontFamily.sans400,
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  attachError: {
-    paddingHorizontal: spacing.xxl,
-    paddingBottom: 4,
-    fontFamily: fontFamily.sans500,
-    fontSize: 12,
-    color: colors.danger,
-  },
-  inputRow: {
-    paddingHorizontal: spacing.xxl,
-    paddingTop: spacing.ms,
-    position: 'relative',
-  },
-  composer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderRadius: 999,
-    paddingVertical: 9,
-    paddingRight: 9,
-    paddingLeft: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.75)',
-    shadowColor: colors.ink,
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 22,
-    elevation: 1,
-  },
-  composerNight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingRight: 8,
-    paddingLeft: 18,
-    backgroundColor: 'rgba(237,253,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(237,253,255,0.1)',
-  },
-  attachButton: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  input: {
-    flex: 1,
-    fontFamily: fontFamily.sans400,
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  inputNight: {
-    color: colors.pale,
-  },
-  sendButtonDay: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendButtonNight: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: colors.lime,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.lime,
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 16,
-    elevation: 2,
-  },
-  flyingPlane: {
-    position: 'absolute',
-    right: 48,
-    top: 2,
-  },
-  sheetTitle: {
-    fontFamily: fontFamily.sans700,
-    fontSize: 18,
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  sheetBody: {
-    fontFamily: fontFamily.sans400,
-    fontSize: 13.5,
-    lineHeight: 20,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  sheetOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.ms,
-    paddingVertical: 13,
-  },
-  sheetOptionPressed: {
-    opacity: 0.6,
-  },
-  sheetOptionIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.pressWash,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetOptionIconDestructive: {
-    backgroundColor: colors.dangerBg,
-  },
-  sheetOptionLabel: {
-    fontFamily: fontFamily.sans600,
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  sheetOptionLabelDestructive: {
-    color: colors.danger,
-  },
-  sheetActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  sheetActionFlex: {
-    flex: 1,
-  },
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+  } as ViewStyle,
+  headerNight: { backgroundColor: '#36432F' },
+  headBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,.14)', alignItems: 'center', justifyContent: 'center' },
+  pressedSmall: { transform: [{ scale: 0.88 }] },
+  avatarWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff' },
+  onlineDot: { position: 'absolute', right: 0, bottom: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: '#7BE07A', borderWidth: 2, borderColor: OLIVE },
+  headText: { flex: 1, minWidth: 0 },
+  headName: { fontFamily: 'Figtree_800ExtraBold', fontSize: 17, color: '#fff' },
+  headStatus: { fontFamily: 'Figtree_600SemiBold', fontSize: 12, color: 'rgba(255,255,255,.7)' },
+  list: { paddingTop: 14, paddingHorizontal: 16, gap: 6 },
+  empty: { alignSelf: 'center', marginTop: 24, fontFamily: 'Figtree_600SemiBold', fontSize: 14, color: 'rgba(17,17,17,.5)' },
+  dayChip: { alignSelf: 'center', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: 'rgba(255,255,255,.7)', borderWidth: 1.5, borderColor: 'rgba(17,17,17,.15)', marginVertical: 6 },
+  dayChipNight: { backgroundColor: 'rgba(255,255,255,.08)', borderColor: 'rgba(255,255,255,.15)' },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  typing: { alignSelf: 'flex-start', marginTop: 6, flexDirection: 'row', gap: 5, paddingVertical: 13, paddingHorizontal: 15, borderRadius: 20, borderBottomLeftRadius: 6, backgroundColor: '#fff', borderWidth: 2, borderColor: 'rgba(17,17,17,.12)' },
+  typingNight: { backgroundColor: '#2A3324', borderColor: 'rgba(255,255,255,.08)' },
+  typingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: OLIVE },
+  flame: { position: 'absolute', left: 16, bottom: 8, zIndex: 7, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  streakNum: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 28, lineHeight: 30, letterSpacing: -1, color: '#1C2414' },
+  replyBar: { marginHorizontal: 18, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingRight: 8, paddingLeft: 14, backgroundColor: PAPER, borderWidth: 2, borderColor: INK, borderRadius: 16, boxShadow: `3px 3px 0 ${INK}` } as ViewStyle,
+  replyBody: { flex: 1, minWidth: 0, borderLeftWidth: 3, borderLeftColor: '#2F6BFF', paddingLeft: 8 },
+  replyText: { fontFamily: 'Figtree_600SemiBold', fontSize: 13, color: INK },
+  replyX: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(17,17,17,.08)', alignItems: 'center', justifyContent: 'center' },
+  composer: { marginHorizontal: 14, height: 64, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 10, paddingRight: 8, borderRadius: 32, backgroundColor: PAPER, boxShadow: '0 8px 24px rgba(30,40,20,.18)' } as ViewStyle,
+  composerNight: { backgroundColor: '#222B1C' },
+  plusBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  plusSpin: { transitionProperty: 'transform', transitionDuration: '0.4s', transitionTimingFunction: SPRING } as unknown as ViewStyle,
+  input: { flex: 1, minWidth: 0, fontFamily: 'Figtree_600SemiBold', fontSize: 16, color: INK },
+  sendBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', transitionProperty: 'background-color, transform', transitionDuration: '0.25s' } as unknown as ViewStyle,
+  tray: { position: 'absolute', left: 14, zIndex: 9, width: 250, padding: 10, borderRadius: 26, backgroundColor: '#fff', boxShadow: '0 14px 34px rgba(20,24,16,.18)', gap: 2, transformOrigin: '24px 100%' } as ViewStyle,
+  trayRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8, paddingLeft: 6, paddingRight: 10, borderRadius: 18 },
+  trayIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#F3F3F1', alignItems: 'center', justifyContent: 'center' },
+  trayLabel: { fontFamily: 'Figtree_700Bold', fontSize: 18, letterSpacing: -0.2, color: '#1C2414' },
+  menu: { position: 'absolute', right: 14, zIndex: 12, width: 210, padding: 6, backgroundColor: PAPER, borderWidth: 2.5, borderColor: INK, borderRadius: 18, boxShadow: `4px 4px 0 ${INK}`, transformOrigin: '90% 0%' } as ViewStyle,
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12 },
+  menuText: { fontFamily: 'Figtree_700Bold', fontSize: 14, color: INK },
+  lightbox: { zIndex: 38, backgroundColor: 'rgba(17,17,17,.82)', alignItems: 'center', justifyContent: 'center', gap: 18 },
+  lightboxCard: { width: 310, padding: 10, paddingBottom: 40, backgroundColor: '#fff', transform: [{ rotate: '-2deg' }] },
+  sheetTitle: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 22, color: INK, marginBottom: 6 },
+  sheetBody: { fontFamily: 'Figtree_500Medium', fontSize: 14.5, lineHeight: 20, color: 'rgba(17,17,17,.7)', marginBottom: 16 },
+  sheetActions: { flexDirection: 'row', gap: 10 },
 });
