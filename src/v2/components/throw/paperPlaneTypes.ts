@@ -34,7 +34,8 @@ export interface PaperPlaneStageHandle {
   setReadyBank: (fraction: number) => void;
   /** 0..1 — maps directly onto the fold timeline (0 = flat sheet, 1 = fully folded plane). */
   seek: (progress: number) => void;
-  setOptions: (o: { speed?: number; trail?: boolean; follow?: boolean }) => void;
+  /** `zoomOut` > 1 pulls the camera back so the plane has more room in a narrow box. */
+  setOptions: (o: { speed?: number; trail?: boolean; follow?: boolean; zoomOut?: number }) => void;
   /**
    * Bakes the user's handwritten strokes or typed text onto the plane's texture, so the folded
    * plane shows the actual letter instead of blank paper. `sourceSize` is the pixel box the
