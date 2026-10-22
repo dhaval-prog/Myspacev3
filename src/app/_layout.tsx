@@ -1,6 +1,9 @@
+// Must come first: makes every screen size itself to the phone-width column on iPad/desktop.
+import '@/ui/frame';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -108,7 +111,8 @@ export default function RootLayout() {
   if (!fontsReady) return <Boot />;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: C.cobalt }}>
+    // Transparent on web so the page's dotted backdrop (index.html) shows beside the app column on iPad/desktop.
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : C.cobalt }}>
       <SafeAreaProvider>
         <StoreProvider>
           <AuthProvider>

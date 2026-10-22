@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 import { C, F } from '@/theme/tokens';
+import { FRAME_WIDTH, isNativeTablet } from './frame';
 
 export const A = Animated.View;
 export const AText = Animated.Text;
@@ -153,7 +154,7 @@ export function Plane({
 export const IS_WEB = Platform.OS === 'web';
 const WEB_TOP = 14;
 /** Widest the app gets on web before it's centred as a mobile column. */
-export const WEB_MAX_WIDTH = 480;
+export const WEB_MAX_WIDTH = FRAME_WIDTH;
 
 /** Status-bar height: real inset on device, a small top margin on web. */
 export function useStatusBar() {
@@ -169,11 +170,26 @@ export function useY() {
 }
 
 /** Web: full-bleed on phones, a centred mobile-width column on wider screens. Native: passthrough. */
+/** Wide screens (iPad, desktop) show the app in a centred phone-width column — see ui/frame. On web
+ * the page backdrop behind it comes from index.html; on a native tablet it's drawn here. */
 export function WebShell({ children }: { children: ReactNode }) {
-  if (!IS_WEB) return <>{children}</>;
+  if (!IS_WEB && !isNativeTablet()) return <>{children}</>;
   return (
-    <View style={{ flex: 1, alignItems: 'center', backgroundColor: C.cobalt }}>
-      <View style={{ flex: 1, width: '100%', maxWidth: WEB_MAX_WIDTH, overflow: 'hidden', backgroundColor: C.paper }}>{children}</View>
+    <View style={{ flex: 1, alignItems: 'center', backgroundColor: IS_WEB ? 'transparent' : C.cobalt }}>
+      <View
+        style={
+          {
+            flex: 1,
+            width: '100%',
+            maxWidth: WEB_MAX_WIDTH,
+            overflow: 'hidden',
+            backgroundColor: C.paper,
+            boxShadow: '0 0 0 1px rgba(17,17,17,.12), 0 30px 80px rgba(10,20,80,.35)',
+          } as ViewStyle
+        }
+      >
+        {children}
+      </View>
     </View>
   );
 }

@@ -125,6 +125,37 @@
         height: 100%;
         flex: 1;
       }
+      /* iPad / desktop: the app runs in a centred 480px column (see src/ui/frame.ts and WebShell).
+         Behind it, the same cobalt-and-dots backdrop as the launch screen. */
+      @media (min-width: 600px) {
+        html,
+        body {
+          background-color: #2b4bff;
+          background-image: radial-gradient(circle at 50% 30%, rgba(158, 179, 255, 0.55), rgba(43, 75, 255, 0) 60%),
+            radial-gradient(circle, rgba(255, 255, 255, 0.12) 1.2px, transparent 1.2px);
+          background-size: 100% 100%, 18px 18px;
+          background-attachment: fixed;
+        }
+        /* Contains the app's position:fixed layers (overlays, flashes) to the column. */
+        #root {
+          transform: translateZ(0);
+        }
+        /* Pop-ups (bottom sheets, menus, photo viewers) are rendered outside #root by
+           react-native-web's Modal; keep them inside the same column instead of the whole window. */
+        body > div:not(#root):not(#boot) {
+          position: fixed;
+          top: 0;
+          bottom: 0;
+          left: 50%;
+          width: 480px;
+          max-width: 100vw;
+          transform: translateX(-50%);
+          pointer-events: none;
+        }
+        body > div:not(#root):not(#boot) > * {
+          pointer-events: auto;
+        }
+      }
     </style>
 
     <!-- "Add to Home Screen" icon for Android/Chrome (via the web manifest) and other PWA-aware browsers. -->
