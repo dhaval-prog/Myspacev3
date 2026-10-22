@@ -1,5 +1,7 @@
 // 09 Home · Chats — real friends, groups and messages from Supabase. Tap a row to open the thread.
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, View, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -10,6 +12,7 @@ import { C, F } from '@/theme/tokens';
 import { Person } from '@/ui/Person';
 import { A, Icon, ICON, Plane, Press, T, useStatusBar } from '@/ui/primitives';
 import { Screen, TabBar } from '@/ui/Screen';
+import { SwipeRow } from '@/ui/SwipeRow';
 import { useAuth } from '@/v2/context/AuthContext';
 import { useFriends } from '@/v2/context/FriendsContext';
 import type { DirectMessage } from '@/v2/types/friends';
@@ -56,7 +59,8 @@ function rowStyle(unread: boolean): ViewStyle {
     borderRadius: 24,
     paddingVertical: 14,
     paddingHorizontal: 18,
-    backgroundColor: unread ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.6)',
+    // Solid (pre-blended over the #F6F5DF page) so the swipe-to-delete button can't show through.
+    backgroundColor: unread ? '#FEFEFC' : '#FBFBF2',
     borderWidth: unread ? 1.5 : 1,
     borderColor: unread ? I : 'rgba(255,255,255,.5)',
     boxShadow: unread ? `3px 3px 0 ${I}` : 'none',
@@ -65,7 +69,10 @@ function rowStyle(unread: boolean): ViewStyle {
 
 type Row =
   | { kind: 'dm'; id: string; userId: string; name: string; avatarUrl: string | null; last?: DirectMessage; unread: number; at: string; isNew: boolean }
-  | { kind: 'group'; id: string; name: string; members: string[]; last?: GroupMessage; at: string };
+  | { kind: 'group'; id: string; name: string; members: string[]; last?: GroupMessage; at: string; ownerId: string };
+
+// A deleted 1:1 chat: its messages are wiped, and the row stays hidden until a newer message arrives.
+const HIDDEN_KEY = 'myspace.hiddenChats.v1';
 
 export default function Chat() {
   const { top } = useStatusBar();
@@ -73,6 +80,40 @@ export default function Chat() {
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const justIds = new Set(f.justAccepted.map((x) => x.connectionId));
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  const [hidden, setHidden] = useState<Record<string, string>>({});
+  const [gone, setGone] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    AsyncStorage.getItem(HIDDEN_KEY)
+      .then((raw) => raw && setHidden(JSON.parse(raw)))
+      .catch(() => {});
+  }, []);
+  const isHidden = (connectionId: string, lastAt?: string) => {
+    const at = hidden[connectionId];
+    return !!at && (!lastAt || lastAt <= at);
+  };
+  const deleteDm = (connectionId: string) => {
+    setOpenRow(null);
+    setGone((g) => new Set(g).add(connectionId));
+    const next = { ...hidden, [connectionId]: new Date().toISOString() };
+    setHidden(next);
+    AsyncStorage.setItem(HIDDEN_KEY, JSON.stringify(next)).catch(() => {});
+    f.clearChat(connectionId);
+  };
+  const deleteGroupRow = async (groupId: string, ownerId: string) => {
+    setOpenRow(null);
+    setGone((g) => new Set(g).add(groupId));
+    // The owner deletes the group for everyone; anyone else leaves it.
+    if (ownerId === user?.id) {
+      const { error } = await f.deleteGroup(groupId);
+      if (error) await f.leaveGroup(groupId);
+    } else await f.leaveGroup(groupId);
+  };
+  const deleteRequest = (connectionId: string) => {
+    setOpenRow(null);
+    setGone((g) => new Set(g).add(connectionId));
+    f.cancelRequest(connectionId);
+  };
 
   const rows: Row[] = [
     ...f.friends.map((fr) => {
@@ -91,9 +132,11 @@ export default function Chat() {
     }),
     ...f.groups.map((g) => {
       const last = f.lastGroupMessageFor(g.id);
-      return { kind: 'group' as const, id: g.id, name: g.name, members: f.groupMemberNamesFor(g.id), last, at: last?.createdAt ?? g.createdAt };
+      return { kind: 'group' as const, id: g.id, name: g.name, members: f.groupMemberNamesFor(g.id), last, at: last?.createdAt ?? g.createdAt, ownerId: g.ownerId };
     }),
-  ].sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+  ]
+    .filter((r) => !gone.has(r.id) && !(r.kind === 'dm' && isHidden(r.id, r.last?.createdAt)))
+    .sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 
   const rail = [...f.friends].sort((a, b) => Number(f.isOnline(b.userId)) - Number(f.isOnline(a.userId)));
 
@@ -290,7 +333,8 @@ export default function Chat() {
               const mine = !!r.last && r.last.senderId === user?.id;
               return (
                 <A key={'g' + r.id} style={anim(skSlideIn(), 0.45, 0.25 + i * 0.06, E.out)}>
-                  <Press onPress={() => openGroup(r.id)} pressed={{ opacity: 0.85 }} style={rowStyle(false)} accessibilityLabel={r.name}>
+                  <SwipeRow open={openRow === r.id} onOpenChange={(o) => setOpenRow(o ? r.id : null)} onDelete={() => deleteGroupRow(r.id, r.ownerId)} onPress={() => openGroup(r.id)} label={r.name}>
+                  <View style={rowStyle(false)}>
                     <View style={{ width: 48, height: 48 }}>
                       {r.members.slice(0, 2).map((m, k) => (
                         <View key={k} style={{ position: 'absolute', ...(k ? { right: 0, bottom: 0 } : { left: 0, top: 0 }) }}>
@@ -311,7 +355,8 @@ export default function Chat() {
                         {preview(r.last, !!mine)}
                       </T>
                     </View>
-                  </Press>
+                  </View>
+                  </SwipeRow>
                 </A>
               );
             }
@@ -321,7 +366,8 @@ export default function Chat() {
             const mine = !!r.last && r.last.senderId === user?.id;
             return (
               <A key={r.id} style={r.isNew ? anim(skSlap(0), 0.5, 0.3 + i * 0.08, E.s12) : anim(skSlideIn(), 0.45, 0.25 + i * 0.06, E.out)}>
-                <Press onPress={() => openDm(r.id)} pressed={{ opacity: 0.85 }} style={rowStyle(unread)} accessibilityLabel={r.name}>
+                <SwipeRow open={openRow === r.id} onOpenChange={(o) => setOpenRow(o ? r.id : null)} onDelete={() => deleteDm(r.id)} onPress={() => openDm(r.id)} label={r.name}>
+                <View style={rowStyle(unread)}>
                   <View>
                     <Person id={r.userId} name={r.name} avatarUrl={r.avatarUrl} size={48} font={16} />
                     {online ? (
@@ -347,25 +393,24 @@ export default function Chat() {
                       {unread ? <UnreadPill n={r.unread} /> : null}
                     </View>
                   </View>
-                </Press>
+                </View>
+                </SwipeRow>
               </A>
             );
           })}
         </View>
 
-        {f.sentRequests.map((r, i) => (
-          <A
-            key={r.connectionId}
-            style={[
-              { marginTop: i ? 8 : 20, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 24, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(22,33,12,.22)', paddingVertical: 14, paddingHorizontal: 18 },
-              anim(skUp(), 0.5, 0.8),
-            ]}>
-            <Press
-              onPress={() => {
-                f.openChat(r.connectionId);
-                router.push('/thread');
-              }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+        {f.sentRequests.filter((r) => !gone.has(r.connectionId)).map((r, i) => (
+          <A key={r.connectionId} style={[{ marginTop: i ? 8 : 20 }, anim(skUp(), 0.5, 0.8)]}>
+          <SwipeRow open={openRow === r.connectionId} onOpenChange={(o) => setOpenRow(o ? r.connectionId : null)} onDelete={() => deleteRequest(r.connectionId)}
+            onPress={() => {
+              f.openChat(r.connectionId);
+              router.push('/thread');
+            }}
+            label={`Request to ${r.name}`}>
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 24, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(22,33,12,.22)', paddingVertical: 14, paddingHorizontal: 18, backgroundColor: '#F6F5DF' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(22,33,12,.06)', alignItems: 'center', justifyContent: 'center' }}>
                 <Icon d={ICON.lock} size={18} color="rgba(22,33,12,.5)" sw={1.7} />
               </View>
@@ -375,7 +420,9 @@ export default function Chat() {
                 </T>{' '}
                 — chat opens when they accept your request.
               </T>
-            </Press>
+            </View>
+          </View>
+          </SwipeRow>
           </A>
         ))}
       </ScrollView>
