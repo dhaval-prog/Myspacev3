@@ -128,6 +128,8 @@ export function CatchLetterOverlay({
   const sheetW = W - 32;
   const sheetH = H - sheetTop - 26;
   const dragDist = Math.max(220, sheetH * 0.55);
+  // Folding back needs only a short pull down.
+  const foldDist = 150;
 
   // Bake the letter onto the plane and start fully folded.
   useEffect(() => {
@@ -199,7 +201,7 @@ export function CatchLetterOverlay({
       setDragging(true);
     })
     .onUpdate((e) => {
-      const u = 1 - Math.min(1, Math.max(0, e.translationY / dragDist));
+      const u = 1 - Math.min(1, Math.max(0, e.translationY / foldDist));
       if (u <= 0.5 && !crossed.current) {
         crossed.current = true;
         buzz();
@@ -208,9 +210,9 @@ export function CatchLetterOverlay({
     })
     .onEnd((e) => {
       const u = unfoldRef.current;
-      if (u <= 0.5 || (u < 0.88 && e.velocityY > 700)) {
+      if (u <= 0.65 || (u < 0.9 && e.velocityY > 600)) {
         buzz(true);
-        animateUnfold(0, 380, () => {
+        animateUnfold(0, 300, () => {
           setFoldingDown(false);
           setStage('caught');
         });
@@ -437,7 +439,17 @@ export function CatchLetterOverlay({
       ) : null}
 
       {stage === 'read' ? (
-        <View pointerEvents="box-none" style={[styles.readWrap, { top: sheetTop }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close letter" />
+      ) : null}
+      {stage === 'read' ? (
+        <View pointerEvents="box-none" style={[styles.readWrap, { top: topInset + 20 }]}>
+          {!foldingDown ? (
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close letter" style={styles.closeInline}>
+              <Svg width={14} height={14} viewBox="0 0 24 24">
+                <Path d="M6 6l12 12 M18 6 6 18" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" />
+              </Svg>
+            </Pressable>
+          ) : null}
           <GestureDetector gesture={foldPan}>
           {/* Fade lives on this plain wrapper: the entrance keyframe below holds opacity at 1. */}
           <View
@@ -509,14 +521,6 @@ export function CatchLetterOverlay({
                   </Text>
                 </A>
               ) : null}
-              <A style={[styles.signRow, anim(ctInk(), 0.4, signD, 'ease-out')]}>
-                <Text style={styles.sign}>{letter.mine ? '— You' : `— ${first}`}</Text>
-                <A style={[styles.signLine, { transformOrigin: '0% 50%' } as ViewStyle, anim(ctDrawLine(), 0.6, signD, 'ease-out')]}>
-                  <Svg width={100} height={10} viewBox="0 0 90 10">
-                    <Path d="M2 6 C20 0 40 10 60 4 S 84 6 88 3" fill="none" stroke={INK_BLUE} strokeWidth={2.2} strokeLinecap="round" />
-                  </Svg>
-                </A>
-              </A>
               {!letter.mine ? (
                 <>
                   <View style={styles.actions}>
@@ -560,17 +564,19 @@ export function CatchLetterOverlay({
           </GestureDetector>
           {use3d && !foldingDown ? (
             <Text pointerEvents="none" style={[mono(10.5, 'rgba(255,255,255,.6)', 1.4), { textAlign: 'center', marginTop: 12 }]}>
-              DRAG THE LETTER DOWN TO FOLD IT BACK
+              DRAG DOWN TO FOLD · TAP OUTSIDE TO CLOSE
             </Text>
           ) : null}
         </View>
       ) : null}
 
+      {stage !== 'read' ? (
       <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close letter" style={[styles.closeBtn, { top: topInset + 8 }]}>
         <Svg width={14} height={14} viewBox="0 0 24 24">
           <Path d="M6 6l12 12 M18 6 6 18" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" />
         </Svg>
       </Pressable>
+      ) : null}
 
       {lightbox ? (
         <Pressable onPress={() => setLightbox(null)} accessibilityRole="button" accessibilityLabel="Close photo" style={[StyleSheet.absoluteFill, styles.lightbox]}>
@@ -607,6 +613,7 @@ const styles = StyleSheet.create({
   huggedChip: { alignSelf: 'center', marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#FFE1EA', borderWidth: 2, borderColor: INK },
   huggedText: { fontFamily: 'Figtree_800ExtraBold', fontSize: 13.5, color: INK },
   flatSheet: { borderRadius: 26, backgroundColor: PAPER },
+  closeInline: { alignSelf: 'flex-end', marginBottom: 10, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,.18)', alignItems: 'center', justifyContent: 'center' },
   card: { maxHeight: '100%', borderRadius: 26, overflow: 'hidden' },
   readWrap: { position: 'absolute', left: 16, right: 16, bottom: 26, justifyContent: 'center' },
   sheet: { borderRadius: 26, backgroundColor: PAPER, padding: 20, boxShadow: '0 20px 50px rgba(0,0,0,.35)', transitionProperty: 'transform', transitionDuration: '0.3s' } as unknown as ViewStyle,

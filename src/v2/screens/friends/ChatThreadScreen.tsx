@@ -302,7 +302,9 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
           <ScrollView
             ref={scrollRef}
             style={styles.flex}
-            contentContainerStyle={[styles.list, { paddingBottom: showFlame ? 84 : 16 }]}
+            contentContainerStyle={[styles.list, { paddingBottom: showFlame ? 104 : 16 }]}
+            // Late-loading letters/photos grow the list after the first scroll; keep the newest in view.
+            onContentSizeChange={() => !picker && scrollRef.current?.scrollToEnd({ animated: false })}
             showsVerticalScrollIndicator={false}
             onScrollBeginDrag={() => picker && setPicker(null)}
             keyboardShouldPersistTaps="handled"
@@ -343,7 +345,7 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
                       mine={mine}
                       night={night}
                       hugs={detail?.hugCount ?? 0}
-                      hint={(mine ? (opened ? 'Opened' : 'Delivered · unopened') : opened ? 'Opened' : 'Unopened') + (detail?.hugCount ? ` · ♥ ${detail.hugCount}` : '')}
+                      hint={(mine ? (opened ? 'Opened' : 'Delivered · unopened') : opened ? 'Opened' : 'Unopened')}
                       hintGreen={opened && mine}
                       time={timeLabel(m.createdAt)}
                       entrance={entrance}
