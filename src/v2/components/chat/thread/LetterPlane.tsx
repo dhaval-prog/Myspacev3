@@ -14,8 +14,11 @@ export function LetterPlane({
   entrance,
   night,
   hugs = 0,
+  dark = false,
   onPress,
 }: {
+  /** Thrown on dark (night) paper. */
+  dark?: boolean;
   /** Hugs sent back for this letter — shows a small pink heart on the right wing. */
   hugs?: number;
   mine: boolean;
@@ -37,7 +40,7 @@ export function LetterPlane({
         >
           <A style={[styles.plane, loop(ctGlide(), 3)]}>
             <View style={{ transform: [{ rotate: `${mine ? -10 : 30}deg` }] }}>
-              <PaperPlaneArt width={96} />
+              <PaperPlaneArt width={96} dark={dark} />
               {hugs > 0 ? (
                 <A style={[styles.wingHeart, anim(ctHeartChip(), 0.5, 0.3, SPRING)]}>
                   <Heart size={17} />

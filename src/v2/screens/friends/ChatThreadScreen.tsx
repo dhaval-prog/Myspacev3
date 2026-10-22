@@ -57,7 +57,7 @@ import { useThrowColorMode } from '../../context/ThrowColorModeContext';
 import { useFriendStreak } from '../../hooks/useFriendStreak';
 import { useMessageSendStatus } from '../../hooks/useMessageSendStatus';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { markLetterOpened, sendLetterHugs, useThrowDetails } from '../../hooks/useThrowDetails';
+import { isDarkPaper, markLetterOpened, sendLetterHugs, useThrowDetails } from '../../hooks/useThrowDetails';
 
 const BACK = 'M15 5l-7 7 7 7';
 const PHONE =
@@ -248,7 +248,8 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
     .reverse();
 
   const hasText = !!draft.trim();
-  const showFlame = streak > 0 && !tray;
+  // The flame sits in its own row above the composer (never over messages); it only fades while the + tray is open.
+  const showFlame = streak > 0;
   const bg = night ? ['#26331C', '#141C0E'] : ['#E3F0DF', '#F2F0E2'];
 
   return (
@@ -302,7 +303,7 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
           <ScrollView
             ref={scrollRef}
             style={styles.flex}
-            contentContainerStyle={[styles.list, { paddingBottom: showFlame ? 104 : 16 }]}
+            contentContainerStyle={[styles.list, { paddingBottom: 16 }]}
             // Late-loading letters/photos grow the list after the first scroll; keep the newest in view.
             onContentSizeChange={() => !picker && scrollRef.current?.scrollToEnd({ animated: false })}
             showsVerticalScrollIndicator={false}
@@ -345,6 +346,7 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
                       mine={mine}
                       night={night}
                       hugs={detail?.hugCount ?? 0}
+                      dark={isDarkPaper(detail?.penColor)}
                       hint={(mine ? (opened ? 'Opened' : 'Delivered · unopened') : opened ? 'Opened' : 'Unopened')}
                       hintGreen={opened && mine}
                       time={timeLabel(m.createdAt)}
@@ -354,7 +356,7 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
                         setCatching({
                           read: mine || opened,
                           throwId: m.throwId ?? null,
-                          letter: { id: m.id, mine, friendName: focusedFriend.name, city: m.attachmentUrl, time: timeLabel(m.createdAt), text: detail?.messageText?.trim() || m.text, media: detail?.media ?? [], hugs: detail?.hugCount ?? 0 },
+                          letter: { id: m.id, mine, friendName: focusedFriend.name, city: m.attachmentUrl, time: timeLabel(m.createdAt), text: detail?.messageText?.trim() || m.text, media: detail?.media ?? [], hugs: detail?.hugCount ?? 0, dark: isDarkPaper(detail?.penColor) },
                         });
                       }}
                     />
@@ -414,7 +416,8 @@ export function ChatThreadScreen({ onOpenThrow }: { onOpenThrow?: (contactId?: s
 
           {/* streak flame */}
           {showFlame ? (
-            <Pressable onPress={tapFlame} accessibilityRole="button" accessibilityLabel={`${streak} day streak with ${first}`} style={({ pressed }) => [styles.flame, pressed && { transform: [{ scale: 0.94 }] }]}>
+            <Pressable onPress={tapFlame} accessibilityRole="button" accessibilityLabel={`${streak} day streak with ${first}`} disabled={tray}
+              style={({ pressed }) => [styles.flame, tray && { opacity: 0 }, pressed && { transform: [{ scale: 0.94 }] }]}>
               <View style={{ width: 46, height: 60, alignItems: 'center', justifyContent: 'flex-end' }}>
                 <RealFlame size={58} />
                 {flameHearts.map((h) => (
@@ -707,7 +710,7 @@ const styles = StyleSheet.create({
   typing: { alignSelf: 'flex-start', marginTop: 6, flexDirection: 'row', gap: 5, paddingVertical: 13, paddingHorizontal: 15, borderRadius: 20, borderBottomLeftRadius: 6, backgroundColor: '#fff', borderWidth: 2, borderColor: 'rgba(17,17,17,.12)' },
   typingNight: { backgroundColor: '#2A3324', borderColor: 'rgba(255,255,255,.08)' },
   typingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: OLIVE },
-  flame: { position: 'absolute', left: 16, bottom: 8, zIndex: 7, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  flame: { alignSelf: 'flex-start', marginLeft: 16, marginTop: 2, marginBottom: 6, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   streakNum: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 28, lineHeight: 30, letterSpacing: -1, color: '#1C2414' },
   replyBar: { marginHorizontal: 18, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingRight: 8, paddingLeft: 14, backgroundColor: PAPER, borderWidth: 2, borderColor: INK, borderRadius: 16, boxShadow: `3px 3px 0 ${INK}` } as ViewStyle,
   replyBody: { flex: 1, minWidth: 0, borderLeftWidth: 3, borderLeftColor: '#2F6BFF', paddingLeft: 8 },

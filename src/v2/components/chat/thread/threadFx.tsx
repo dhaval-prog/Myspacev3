@@ -234,27 +234,28 @@ export const ctPulsePlay = () =>
 export const ctReadIn = () => kf('ctReadIn', () => T({ '0%': { opacity: 0.6, transform: [{ scale: 0.98 }] }, '100%': { opacity: 1, transform: [{ scale: 1 }] } }));
 
 /** The design's folded paper plane (130×118 artboard). */
-export function PaperPlaneArt({ width }: { width: number }) {
+/** `dark` = a letter thrown on dark (night) paper. */
+export function PaperPlaneArt({ width, dark = false }: { width: number; dark?: boolean }) {
   const id = 'pp' + useId().replace(/[^a-zA-Z0-9]/g, '');
   return (
     <Svg width={width} height={(width * 118) / 130} viewBox="0 0 130 118" style={{ overflow: 'visible' }}>
       <Defs>
         <LinearGradient id={id + 'l'} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#FFFFFF" />
-          <Stop offset="1" stopColor="#EDEDEF" />
+          <Stop offset="0" stopColor={dark ? '#5A5A5D' : '#FFFFFF'} />
+          <Stop offset="1" stopColor={dark ? '#454547' : '#EDEDEF'} />
         </LinearGradient>
         <LinearGradient id={id + 'r'} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#F6F6F7" />
-          <Stop offset="1" stopColor="#D9D9DD" />
+          <Stop offset="0" stopColor={dark ? '#4A4A4C' : '#F6F6F7'} />
+          <Stop offset="1" stopColor={dark ? '#2F2F31' : '#D9D9DD'} />
         </LinearGradient>
       </Defs>
       <Polygon points="68,10 128,48 120,98 76,102" fill="rgba(40,44,70,.05)" />
       <Polygon points="66,8 126,46 118,96 74,100" fill="rgba(40,44,70,.07)" />
-      <Polygon points="60,4 61,112 63,112 62,96" fill="#C8C8CC" />
+      <Polygon points="60,4 61,112 63,112 62,96" fill={dark ? '#262628' : '#C8C8CC'} />
       <Polygon points="60,4 4,90 58,95" fill={`url(#${id}l)`} stroke="rgba(0,0,0,.07)" strokeWidth={0.8} strokeLinejoin="round" />
       <Polygon points="60,4 62,96 118,90" fill={`url(#${id}r)`} stroke="rgba(0,0,0,.07)" strokeWidth={0.8} strokeLinejoin="round" />
       <Path d="M60 4 L58.5 95" stroke="rgba(0,0,0,.18)" strokeWidth={1.1} />
-      <Path d="M60.6 6 L61.6 95" stroke="rgba(255,255,255,.9)" strokeWidth={0.8} />
+      <Path d="M60.6 6 L61.6 95" stroke={dark ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.9)'} strokeWidth={0.8} />
       <Path d="M60 4 L26 92" stroke="rgba(0,0,0,.045)" strokeWidth={1} />
       <Path d="M60 4 L92 93" stroke="rgba(0,0,0,.06)" strokeWidth={1} />
     </Svg>
