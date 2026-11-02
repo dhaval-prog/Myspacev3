@@ -3,11 +3,11 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
-// Defaults point at the shared Myspace Supabase project (same backend as Myspace v2). The
+// Defaults point at the shared Sailo Supabase project (MySpace moved into it; same backend as Myspace v2 and Sailo). The
 // publishable key is a public, client-side key by design — access is enforced by RLS.
 // Override either with EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY (see .env.example).
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://fdjeafihwwoeqdcnqhjd.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_HSudkxqtgrRyMX-N14Jx3w_waofTn_A';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://dfytxscebupuqwehsojc.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ZsAQV4mbCnCOiSwwZFRb4A_PeUgwGdO';
 
 /** True once both env vars are actually filled in — lets the UI surface a clear setup error instead of a confusing network failure. */
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
