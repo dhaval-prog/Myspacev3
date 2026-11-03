@@ -439,14 +439,12 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
     if (!userId) return;
     let live = true;
     (async () => {
-      // phone and date of birth live in profile_private (only you can read it), apart from the shared profile
-      const [{ data: p }, { data: pp }, { data: c }] = await Promise.all([
-        supabase.from('profiles').select('full_name, username').eq('id', userId).maybeSingle(),
-        supabase.from('profile_private').select('phone, date_of_birth').eq('id', userId).maybeSingle(),
+      const [{ data: p }, { data: c }] = await Promise.all([
+        supabase.from('profiles').select('full_name, username, phone, date_of_birth').eq('id', userId).maybeSingle(),
         supabase.from('budget_cards').select('id, label'),
       ]);
       if (!live) return;
-      const row = { ...(p ?? {}), ...(pp ?? {}) } as { full_name?: string | null; username?: string | null; phone?: string | null; date_of_birth?: string | null };
+      const row = (p ?? {}) as { full_name?: string | null; username?: string | null; phone?: string | null; date_of_birth?: string | null };
       const f = { name: row.full_name ?? '', user: row.username ?? '', email: user?.email ?? '', phone: row.phone ?? '', dob: row.date_of_birth ?? '' };
       setSaved(f);
       setV(f);
@@ -473,12 +471,8 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
     if (uname && !/^[a-z0-9_]{3,20}$/.test(uname)) return setSaveError('Username: 3–20 letters, numbers or underscores.');
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: v.name.trim() || null, username: uname || null })
+      .update({ full_name: v.name.trim() || null, username: uname || null, phone: v.phone.trim() || null, date_of_birth: dob || null })
       .eq('id', userId);
-    if (!error) {
-      const { error: e1 } = await supabase.from('profile_private').upsert({ id: userId, phone: v.phone.trim() || null, date_of_birth: dob || null });
-      if (e1) return setSaveError(e1.message);
-    }
     if (error) return setSaveError(error.code === '23505' ? 'That username is already taken.' : error.message);
     if (v.name.trim() !== saved.name) await updateProfileName(v.name.trim());
     let emailNote = false;
