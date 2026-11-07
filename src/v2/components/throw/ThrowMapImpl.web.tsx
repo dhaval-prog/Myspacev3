@@ -12,13 +12,10 @@ import type { ThrowMapProps } from './throwMapTypes';
 import type { LatLng } from '../../utils/geo';
 
 mapboxgl.accessToken = MAPBOX_TOKEN;
-// A custom Mapbox Studio style ("Faded"), built on Mapbox Standard rather than from scratch — real
-// 3D buildings/landmarks and day/night are both handled by the style itself (its Standard "basemap"
-// import has `show3dFacades`/`showLandmarkIcons` on and a `lightPreset` config we drive directly,
-// see `applyLightPreset` below), not hand-rolled per-layer paint overrides the way the previous
-// OpenFreeMap/MapLibre setup needed — Mapbox's own vector tiles/style require this real Mapbox GL
-// JS SDK and an access token rather than the MapLibre fork, unlike OpenFreeMap's keyless tiles.
-const MAPBOX_STYLE_URL = process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL ?? 'mapbox://styles/mapbox/standard';
+// A flat 2D style (no 3D buildings, terrain or tilt) so Throw loads fast even on mobile data —
+// far fewer tiles and no 3D geometry to download. Recoloured at load for the naked look, and for
+// night with plain paint changes (no style reload), see paintNaked.
+const MAPBOX_STYLE_URL = 'mapbox://styles/mapbox/light-v11';
 
 // The flying plane's size range — large right after launch, small on approach (see
 // `planeSizeForProgress`).
@@ -28,9 +25,9 @@ const PLANE_MIN_SIZE = 16;
 // The map's own starting camera, before any contact focus/fit ever applies — picked per explicit
 // user request against a live view of this exact style, not a generic whole-world fallback.
 const DEFAULT_CENTER: [number, number] = [73.939097, 18.520358]; // Mapbox wants [lng, lat]
-const DEFAULT_ZOOM = 16.26;
-const DEFAULT_BEARING = -9.6;
-const DEFAULT_PITCH = 76.5;
+const DEFAULT_ZOOM = 15.5;
+const DEFAULT_BEARING = 0;
+const DEFAULT_PITCH = 0;
 // The focused-contact camera (a contact, including self, selected) now matches the default camera
 // exactly, per explicit user request — the view shouldn't change when a contact is selected.
 const FOCUS_ZOOM = DEFAULT_ZOOM;
@@ -91,35 +88,43 @@ function applyTarget(map: mapboxgl.Map, target: Target) {
   }
 }
 
-// Drives the style's own day/night rendering — a config property on its "basemap" (Mapbox
-// Standard) import, not a style reload, so this is cheap to call on every flip rather than
-// needing the old setStyle-based approach's guard against redundant calls.
-function applyLightPreset(map: mapboxgl.Map, isDay: boolean) {
-  map.setConfigProperty('basemap', 'lightPreset', isDay ? 'day' : 'night');
-}
-
-// Naked Throw: the Standard basemap without shop/transit/street labels or 3D buildings, so the
-// letter is the only thing competing for attention. Each property is best-effort — a custom style
-// without one simply keeps its own default.
-function applyNakedBasemap(map: mapboxgl.Map) {
-  const props: [string, unknown][] = [
-    ['showPointOfInterestLabels', false],
-    ['showTransitLabels', false],
-    ['showRoadLabels', false],
-    ['showPedestrianRoads', false],
-    ['show3dObjects', false],
-    ['theme', 'faded'],
-  ];
-  for (const [k, v] of props) {
+// Naked 2D basemap: only place names stay, buildings/transit/POIs are hidden, and land, water and
+// roads are recoloured for day or night. Paint-only, so flipping day/night is instant. Every step
+// is best-effort: a layer this style doesn't have is simply skipped.
+function paintNaked(map: mapboxgl.Map, isDay: boolean) {
+  const c = isDay
+    ? { land: '#F6F5F1', water: '#DCE6F0', road: '#FFFFFF', label: 'rgba(60,64,80,.55)', halo: 'rgba(255,255,255,.9)', green: 0.25 }
+    : { land: '#1B2130', water: '#121826', road: '#2A3242', label: 'rgba(220,226,240,.6)', halo: 'rgba(0,0,0,.6)', green: 0.08 };
+  const set = (fn: () => void) => {
     try {
-      map.setConfigProperty('basemap', k, v);
+      fn();
     } catch {
-      // not supported by this style
+      // layer/property not in this style
     }
+  };
+  for (const l of map.getStyle()?.layers ?? []) {
+    const id = l.id;
+    if (l.type === 'symbol') {
+      if (!/settlement|place-|country|state/.test(id)) set(() => map.setLayoutProperty(id, 'visibility', 'none'));
+      else {
+        set(() => map.setPaintProperty(id, 'text-color', c.label));
+        set(() => map.setPaintProperty(id, 'text-halo-color', c.halo));
+      }
+      continue;
+    }
+    if (l.type === 'background') set(() => map.setPaintProperty(id, 'background-color', c.land));
+    else if (l.type === 'fill' && /water/.test(id)) set(() => map.setPaintProperty(id, 'fill-color', c.water));
+    else if (l.type === 'line' && /water/.test(id)) set(() => map.setPaintProperty(id, 'line-color', c.water));
+    else if ((l.type === 'fill' || l.type === 'fill-extrusion') && /building/.test(id)) set(() => map.setLayoutProperty(id, 'visibility', 'none'));
+    else if (l.type === 'fill' && /landuse|park|national|landcover|land-structure/.test(id)) set(() => map.setPaintProperty(id, 'fill-opacity', c.green));
+    else if (l.type === 'line' && /road|bridge|tunnel/.test(id)) set(() => map.setPaintProperty(id, 'line-color', c.road));
+    else if (l.type === 'line' && /admin|boundary/.test(id)) set(() => map.setPaintProperty(id, 'line-opacity', 0.3));
+    else if (l.type === 'line' && /rail|transit|ferry|aerialway/.test(id)) set(() => map.setLayoutProperty(id, 'visibility', 'none'));
+    else if (l.type === 'hillshade') set(() => map.setLayoutProperty(id, 'visibility', 'none'));
   }
 }
 
-// Mapbox Standard's own lightPreset switch isn't instant by default — the style ships with a
+// Paint changes cross-fade by default — the style ships with a
 // multi-second cross-fade transition (a deliberate "time-lapse" showcase for the Standard style),
 // which read as the map "not loading fast" whenever a contact switch also flips day/night.
 // `Style#setTransition` (undocumented on the public `Map` type but real at runtime — Mapbox's own
@@ -211,6 +216,13 @@ export function ThrowMap({ pins, focus, fitPoints, route, onMapPress }: ThrowMap
       zoom: DEFAULT_ZOOM,
       bearing: DEFAULT_BEARING,
       pitch: DEFAULT_PITCH,
+      // Flat map: no tilt or rotation, plain Mercator, no fade-in of tiles.
+      maxPitch: 0,
+      pitchWithRotate: false,
+      dragRotate: false,
+      touchPitch: false,
+      projection: 'mercator',
+      fadeDuration: 0,
       // A plain boolean here (unlike MapLibre's `{compact: true}` object) — the compact behavior
       // is a separate AttributionControl added manually right below instead.
       attributionControl: false,
@@ -242,8 +254,7 @@ export function ThrowMap({ pins, focus, fitPoints, route, onMapPress }: ThrowMap
       // "whatever the style's own saved default is" rather than take the whole map down.
       try {
         disableStyleTransitions(map);
-        applyLightPreset(map, isDayRef.current);
-        applyNakedBasemap(map);
+        paintNaked(map, isDayRef.current);
         addOrUpdateRoute(map, routePointsRef.current);
       } catch (e) {
         console.error('[ThrowMap] failed to apply light preset/route after style load:', e);
@@ -297,7 +308,7 @@ export function ThrowMap({ pins, focus, fitPoints, route, onMapPress }: ThrowMap
     // initial application happens via `style.load` in the mount effect above instead; this only
     // needs to handle isDay flipping *after* the style has already loaded.
     if (!map || !map.isStyleLoaded()) return;
-    applyLightPreset(map, isDay);
+    paintNaked(map, isDay);
   }, [isDay]);
 
   // The route line is a real Mapbox GeoJSON line layer (correct at every zoom without extra
