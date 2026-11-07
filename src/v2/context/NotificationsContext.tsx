@@ -55,6 +55,8 @@ interface NotificationsContextValue {
   acknowledge: (id: string) => void;
   /** Marks every notification read at once. */
   clearAll: () => void;
+  /** Removes one notification for good (swipe to clear). */
+  dismiss: (id: string) => void;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
@@ -155,6 +157,18 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       });
   };
 
+  const dismiss = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from('notifications')
+      .delete()
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('[notifications] failed to clear:', error.message);
+      });
+  };
+
   const clearAll = () => {
     if (!userId) return;
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -170,7 +184,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   };
 
   const value = useMemo<NotificationsContextValue>(
-    () => ({ notifications, unreadCount: notifications.filter((n) => !n.read).length, acknowledge, clearAll }),
+    () => ({ notifications, unreadCount: notifications.filter((n) => !n.read).length, acknowledge, clearAll, dismiss }),
     [notifications],
   );
 

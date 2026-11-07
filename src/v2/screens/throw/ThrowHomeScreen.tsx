@@ -13,11 +13,10 @@ import { StoryPreviewScreen } from '../../components/throw/StoryPreviewScreen';
 import { StoryTrimScreen } from '../../components/throw/StoryTrimScreen';
 import { WeatherOverlay } from '../../components/throw/weather/WeatherOverlay';
 import { NotificationsPanel } from '../../components/throw/NotificationsPanel';
-import { ProfileCard } from '../../components/throw/ProfileCard';
+import { StatusHeader } from '../../components/throw/StatusHeader';
 import { LetterPlaneGlyph } from '../../components/throw/inbox/LetterPlaneGlyph';
 import { InlineReceivedLetters } from '../../components/throw/InlineReceivedLetters';
 import { v3Layout } from '../../theme/throwLettersV3Tokens';
-import { AddFriendCard } from '../../components/throw/AddFriendCard';
 import { BottomNav } from '../../components/BottomNav';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { spreadCoincidentPins } from '../../utils/mapProjection';
@@ -36,106 +35,6 @@ import type { AlertSchedule, MediaTrim, StrokePath, ThrowLetter } from '../../ty
 import type { StoryMediaType } from '../../types/story';
 import type { ThrowMapPin } from '../../components/throw/throwMapTypes';
 
-// Shared flick-to-switch-recipient gesture thresholds — used by the Add-Status-cards and
-// Notifications-panel flick gestures (see useContactFlickGesture below), same capture thresholds
-// as FoldingLetter's own CONTACT_FLICK_CAPTURE_DX/RATIO (not imported, since those are private to
-// that module, but kept numerically identical so the gesture feel matches exactly).
-const INBOX_FLICK_CAPTURE_DX = 20;
-const INBOX_FLICK_CAPTURE_RATIO = 1.7;
-
-/** Drives the same flick-to-switch-recipient gesture the folded letter card and the in-place
- * inbox panel already use (see CONTACT_DRAG_SPACING/INBOX_FLICK_CAPTURE_*), but for a surface
- * that only exists while a virtual carousel slot — Add Status or Notifications — is the current
- * selection, so flicking there reaches the next/previous slot exactly like flicking the letter
- * card already does, instead of being a dead end only the carousel itself (or a second trip back
- * to a real contact) can get you out of. `active` gates the gesture to whenever this particular
- * surface is actually mounted; each call site gets its own ref/PanResponder, independent of the
- * others, since at most one of them is ever mounted at a time. */
-function useContactFlickGesture<T extends ComponentRef<typeof View> | ComponentRef<typeof ScrollView> = ComponentRef<typeof View>>(
-  active: boolean,
-  handlers: { onContactDragStart: () => void; onContactDragOffset: (steps: number) => void; onContactDragEnd: () => void },
-) {
-  const ref = useRef<T>(null);
-  const latest = useRef(handlers);
-  latest.current = handlers;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponderCapture: (_e, g) =>
-        Math.abs(g.dx) > INBOX_FLICK_CAPTURE_DX && Math.abs(g.dx) > Math.abs(g.dy) * INBOX_FLICK_CAPTURE_RATIO,
-      onPanResponderGrant: () => latest.current.onContactDragStart(),
-      // Negated — matches FoldingLetter's own open-paper flick convention (left flicks forward to
-      // the next slot, right flicks back to the previous one).
-      onPanResponderMove: (_, g) => latest.current.onContactDragOffset(-g.dx / CONTACT_DRAG_SPACING),
-      onPanResponderRelease: () => latest.current.onContactDragEnd(),
-      onPanResponderTerminate: () => latest.current.onContactDragEnd(),
-    }),
-  ).current;
-
-  // Same RN-Web PanResponder move-tracking unreliability the inbox panel's own flick gesture
-  // already works around — raw DOM listeners on web, the real PanResponder above on native.
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !active) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const node = ref.current as any as HTMLElement | null;
-    if (!node) return;
-    const getPoint = (e: MouseEvent | TouchEvent): { x: number; y: number } | null => {
-      if ('touches' in e) {
-        const t = e.touches[0];
-        return t ? { x: t.clientX, y: t.clientY } : null;
-      }
-      return { x: e.clientX, y: e.clientY };
-    };
-    let start: { x: number; y: number } | null = null;
-    let captured = false;
-    const onDown = (e: MouseEvent | TouchEvent) => {
-      start = getPoint(e);
-      captured = false;
-    };
-    const onMove = (e: MouseEvent | TouchEvent) => {
-      if (!start) return;
-      const p = getPoint(e);
-      if (!p) return;
-      const dx = p.x - start.x;
-      const dy = p.y - start.y;
-      if (!captured) {
-        if (Math.abs(dx) > INBOX_FLICK_CAPTURE_DX && Math.abs(dx) > Math.abs(dy) * INBOX_FLICK_CAPTURE_RATIO) {
-          captured = true;
-          latest.current.onContactDragStart();
-        } else {
-          return;
-        }
-      }
-      latest.current.onContactDragOffset(-dx / CONTACT_DRAG_SPACING);
-    };
-    const onUp = () => {
-      start = null;
-      if (captured) {
-        captured = false;
-        latest.current.onContactDragEnd();
-      }
-    };
-    node.addEventListener('mousedown', onDown);
-    node.addEventListener('touchstart', onDown, { passive: true });
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('touchmove', onMove, { passive: true });
-    window.addEventListener('mouseup', onUp);
-    window.addEventListener('touchend', onUp);
-    return () => {
-      node.removeEventListener('mousedown', onDown);
-      node.removeEventListener('touchstart', onDown);
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      window.removeEventListener('touchend', onUp);
-    };
-  }, [active]);
-
-  return { ref, panHandlers: Platform.OS !== 'web' ? panResponder.panHandlers : undefined };
-}
-
 /** What's currently covering the screen for the story flow — capture (camera/gallery), the preview
  * step (a captured/picked photo or short video, awaiting the explicit post confirmation), or the
  * trim step (only for a picked video over 15s). Watching a contact's already-posted stories isn't
@@ -143,11 +42,6 @@ function useContactFlickGesture<T extends ComponentRef<typeof View> | ComponentR
  * more than one at a time, so a single piece of state (not three booleans) makes that mutual
  * exclusion structural rather than something every setter has to remember to preserve. */
 type StoryFlow =
-  /** The Profile + Add Friend cards popover (see ProfileCard/AddFriendCard) — the first thing
-   * shown once the Add Status slot is selected, before the camera. Tapping "Add status" inside
-   * ProfileCard moves on to 'capture'; closing the camera comes back here rather than exiting
-   * Add Status mode entirely. */
-  | { name: 'cards' }
   | { name: 'capture' }
   | { name: 'preview'; localUri: string; mediaType: StoryMediaType }
   | { name: 'trim'; localUri: string; durationMs: number };
@@ -308,7 +202,7 @@ export function ThrowHomeScreen({
   // takes over the letter card's own slot with the received-letters arrival sequence (plane lands,
   // envelope opens) in place of the compose paper, same map/screen underneath, per explicit
   // request that this not navigate to a separate screen. Same mutual-exclusion convention as
-  // isNotificationsSelected/isCardsMode: opening this closes them, and vice versa.
+  // isNotificationsSelected/Add Status: opening this closes them, and vice versa.
   const [isReceivingSelected, setIsReceivingSelected] = useState(false);
   const [alertSchedule, setAlertSchedule] = useState<AlertSchedule>(DEFAULT_ALERT_SCHEDULE);
   // Once the user has touched the alert schedule, switching to a different contact is locked
@@ -534,14 +428,16 @@ export function ThrowHomeScreen({
   // the whole "post a story" pipeline reads as one continuous place rather than capture alone
   // being inline and confirm popping up separately.
   const isPreviewMode = storyFlow?.name === 'preview';
-  // The Profile + Add Friend cards popover — see StoryFlow's own comment on 'cards'.
-  const isCardsMode = storyFlow?.name === 'cards';
+  // Naked Add Status: the camera (and its preview) fill the whole screen, with the "You" line,
+  // the carousel and the menu bar floating on top.
+  const isStatusFlow = isCaptureMode || isPreviewMode;
+  const [faceCenter, setFaceCenter] = useState<{ x: number; y: number } | null>(null);
   const myStories = myId ? storiesByUser[myId] : undefined;
   const myLatestStory = myStories && myStories.length > 0 ? myStories[myStories.length - 1] : null;
   // Whether the virtual "Status" slot itself (not a real friend) is the current selection — the
   // status contact's own cards/camera (see its own render below) are scoped to this, same
   // condition RecipientCarousel's own isAddStorySelected prop already uses.
-  const isAddStorySelected = storyView?.viaAddSlot === true || isCaptureMode || isPreviewMode || isCardsMode;
+  const isAddStorySelected = storyView?.viaAddSlot === true || isStatusFlow;
 
   // Tapping/dragging to the Notifications slot again (or while it's already open) closes it —
   // same "tap the active one again to back out" convention the rest of the carousel already uses.
@@ -695,9 +591,9 @@ export function ThrowHomeScreen({
     // useContactFlickGesture below), not just from a real contact's own letter card — in which
     // case the virtual slot already showing is the base to drag relative to, not whatever real
     // contact was selected before it.
-    const base = isNotificationsSelected ? -2 : isCardsMode ? -1 : selectedIndex;
+    const base = isNotificationsSelected ? -2 : isStatusFlow ? -1 : selectedIndex;
     dragBaseIndexRef.current = base;
-    virtualSlotHandledRef.current = isNotificationsSelected ? -2 : isCardsMode ? -1 : null;
+    virtualSlotHandledRef.current = isNotificationsSelected ? -2 : isStatusFlow ? -1 : null;
     setContactDragLiveOffset(base);
   };
   const handleContactDragOffset = (steps: number) => {
@@ -734,7 +630,7 @@ export function ThrowHomeScreen({
       setIsNotificationsSelected(false);
       setIsReceivingSelected(false);
       if (myId) setSelectedFriendId(myId);
-      setStoryFlow({ name: 'cards' });
+      setStoryFlow({ name: 'capture' });
       return;
     }
     virtualSlotHandledRef.current = null;
@@ -751,21 +647,6 @@ export function ThrowHomeScreen({
   const handleContactDragEnd = () => {
     setContactDragLiveOffset(null);
   };
-
-  // Lets flicking work from inside the Add Status cards and the Notifications panel themselves,
-  // not just the carousel or the letter card — same contact-drag machinery as everywhere else
-  // (see useContactFlickGesture's own doc comment), just gated to whichever of these two surfaces
-  // is actually showing.
-  const cardsFlick = useContactFlickGesture<ComponentRef<typeof View>>(isCardsMode, {
-    onContactDragStart: handleContactDragStart,
-    onContactDragOffset: handleContactDragOffset,
-    onContactDragEnd: handleContactDragEnd,
-  });
-  const notificationsFlick = useContactFlickGesture<ComponentRef<typeof View>>(isNotificationsSelected, {
-    onContactDragStart: handleContactDragStart,
-    onContactDragOffset: handleContactDragOffset,
-    onContactDragEnd: handleContactDragEnd,
-  });
 
   const pins: ThrowMapPin[] = useMemo(() => {
     const list: ThrowMapPin[] = [];
@@ -985,13 +866,13 @@ export function ThrowHomeScreen({
                 onExpand={() => setCarouselOpen(true)}
                 streakFor={streakFor}
                 disabled={selfLocked || isCaptureMode || isPreviewMode}
-                isNight={!mapIsDay}
+                isNight={!mapIsDay || isStatusFlow}
                 storyCountFor={storyCountFor}
                 onOpenStory={handleOpenStory}
                 onAddStory={() => {
                   setIsNotificationsSelected(false);
                   setIsReceivingSelected(false);
-                  setStoryFlow({ name: 'cards' });
+                  setStoryFlow({ name: 'capture' });
                 }}
                 isAddStorySelected={isAddStorySelected}
                 storyModeAvatarCount={isStoryMode ? openAvatarCount : undefined}
@@ -1036,44 +917,29 @@ export function ThrowHomeScreen({
           </View>
         )}
 
-        {/* The Profile + Add Friend cards popover — the first thing shown once Add Status is
-            selected, before the camera (see StoryFlow's own 'cards' comment). Both cards come and
-            go together; tapping "Add status" inside ProfileCard moves on to the camera, which
-            takes over this exact slot instead (see isCardsMode's own use in letterCard's render
-            condition below) so the two steps never show at once. */}
-        {!inFlight && isCardsMode && (
-          // A column (not a scroll view): ProfileCard keeps its size and AddFriendCard fills what's
-          // left, scrolling its own list inside, so its rounded bottom always sits above the dock.
-          <Animated.View
-            ref={cardsFlick.ref}
-            {...(Platform.OS !== 'web' ? cardsFlick.panHandlers : null)}
-            style={[
-              styles.cardsOverlay,
-              noSelect,
-              // `bottom` shrinks from its normal BOTTOM_NAV_CLEARANCE-reserved position down to
-              // just the safe-area inset as BottomNav fades out (see chromeShouldHide above), the
-              // same interpolation the letter card's own bottom edge uses — so these cards extend
-              // all the way down once the dock is gone instead of holding space open for it.
-              { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) },
-            ]}
-          >
-            <ProfileCard
-              name="You"
+        {/* Naked Add Status: one plain "You" line under the carousel, over the camera. */}
+        {!inFlight && isStatusFlow && myId && (
+          <View pointerEvents="box-none" style={[styles.statusHeaderWrap, { top: insets.top + 16 + CAROUSEL_HEIGHT + 2 }]}>
+            <StatusHeader
+              userId={myId}
+              name={myName}
               avatarUrl={myAvatarUrl}
-              userId={myId ?? 'me'}
               city={myLocation?.city ?? null}
               friendCount={friends.length}
-              hasStatusToday={myId ? storyCountFor(myId) > 0 : false}
+              storyCount={storyCountFor(myId)}
               status={myLatestStory ? { uri: myLatestStory.mediaUrl, isVideo: myLatestStory.mediaType === 'video', trimStartMs: myLatestStory.trimStartMs, trimEndMs: myLatestStory.trimEndMs } : null}
               onViewStatus={() => {
-                if (!myId) return;
                 setStoryFlow(null);
+                setSelectedFriendId(myId);
                 setStoryView({ userId: myId, viaAddSlot: true });
               }}
-              onAddStatus={() => setStoryFlow({ name: 'capture' })}
+              onDeleteStatus={() => {
+                if (myLatestStory) void deleteStory(myLatestStory.id);
+              }}
+              onAddFriend={onOpenAddFriendScreen}
+              onFaceCenter={setFaceCenter}
             />
-            <AddFriendCard onOpenAddFriendScreen={onOpenAddFriendScreen} style={styles.addFriendFill} />
-          </Animated.View>
+          </View>
         )}
 
         {/* The notification history — a floating glassmorphism card above the map instead of a
@@ -1081,20 +947,18 @@ export function ThrowHomeScreen({
             selected (see RecipientCarousel's own isNotificationsSelected). */}
         {!inFlight && isNotificationsSelected && (
           <Animated.View
-            ref={notificationsFlick.ref}
-            {...(Platform.OS !== 'web' ? notificationsFlick.panHandlers : null)}
             style={[
               styles.notificationsOverlay,
               noSelect,
-              // See cardsOverlay's own comment on this same interpolation.
+              // `bottom` follows the menu bar's fade, same as the letter card's.
               { top: insets.top + 16 + CAROUSEL_HEIGHT + 16, bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) },
             ]}
           >
-            <NotificationsPanel onNavigate={handleNotificationTarget} />
+            <NotificationsPanel onNavigate={handleNotificationTarget} isNight={!mapIsDay} />
           </Animated.View>
         )}
 
-        {!inFlight && selectedFriend && !isNotificationsSelected && !isCardsMode && !isReceivingSelected && (
+        {!inFlight && selectedFriend && !isNotificationsSelected && !isReceivingSelected && (
           // `bottom` shrinks from its normal BOTTOM_NAV_CLEARANCE-reserved position down to just
           // the safe-area inset as the letter folds, on the same chromeOpacity value that already
           // fades BottomNav out — that reserved clearance exists so the card clears the *visible*
@@ -1103,27 +967,33 @@ export function ThrowHomeScreen({
           // above the bottom instead of anchored to it. Animated.View (not View) is what lets
           // `bottom` interpolate at all here.
           <Animated.View
-            style={[
-              styles.letterCard,
-              { bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) },
-            ]}
+            style={
+              isStatusFlow
+                ? styles.letterCardFull
+                : [styles.letterCard, { bottom: Animated.add(insets.bottom + 16, Animated.multiply(chromeOpacity, BOTTOM_NAV_CLEARANCE)) }]
+            }
           >
             <Animated.View style={[styles.letterCardContent, { opacity: cardModeFade }]}>
               {isCaptureMode ? (
                 <StoryCaptureScreen
-                  onClose={() => setStoryFlow({ name: 'cards' })}
+                  onClose={() => setStoryFlow(null)}
                   onCaptured={handleStoryCaptured}
                   onPickedLongVideo={handleStoryPickedLongVideo}
                   onContactDragStart={!lockedRecipient && !selfLocked ? handleContactDragStart : undefined}
                   onContactDragOffset={!lockedRecipient && !selfLocked ? handleContactDragOffset : undefined}
                   onContactDragEnd={!lockedRecipient && !selfLocked ? handleContactDragEnd : undefined}
                   flightTargetY={storyFlightTargetY}
+                  controlsTop={insets.top + 16 + CAROUSEL_HEIGHT + 64}
+                  controlsBottom={insets.bottom + BOTTOM_NAV_CLEARANCE + 6}
                 />
               ) : storyFlow?.name === 'preview' ? (
                 <StoryPreviewScreen
                   localUri={storyFlow.localUri}
                   mediaType={storyFlow.mediaType}
-                  flightTargetY={storyFlightTargetY}
+                  // Posting shrinks the photo into your face in the "You" line, then its ring fills.
+                  flightTargetY={faceCenter?.y ?? storyFlightTargetY}
+                  flightTargetX={faceCenter?.x}
+                  controlsBottom={insets.bottom + BOTTOM_NAV_CLEARANCE + 24}
                   // Discarding a just-captured/picked photo re-opens the camera, not the letter —
                   // preview only ever follows capture (see StoryFlow's own comment: it's always
                   // reached from Status), so "X" backing out of it should land you right back
@@ -1252,7 +1122,7 @@ export function ThrowHomeScreen({
         ]}
         pointerEvents={chromeHidden ? 'none' : 'box-none'}
       >
-        <NakedNavGate shown={navShown || isNotificationsSelected || isCardsMode}>
+        <NakedNavGate shown={navShown || isNotificationsSelected || isStatusFlow}>
         <BottomNav
           activeId="throw"
           onSelect={(id) => {
@@ -1311,10 +1181,9 @@ const styles = StyleSheet.create({
   // The BottomNav dock floats over the map's own bottom edge instead of pushing it up — a
   // sibling of mapArea, absolutely pinned to the screen's bottom so it overlaps in front.
   bottomNavWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
-  recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0 },
+  recipientOverlay: { position: 'absolute', top: 8, left: 0, right: 0, zIndex: 5 },
+  statusHeaderWrap: { position: 'absolute', left: 0, right: 0, zIndex: 6 },
   notificationsOverlay: { position: 'absolute', left: 16, right: 16 },
-  cardsOverlay: { position: 'absolute', left: 16, right: 16, gap: 12 },
-  addFriendFill: { flex: 1, minHeight: 0 },
   replyLine: {
     textAlign: 'center',
     fontFamily: throwFont.ui700,
@@ -1336,6 +1205,7 @@ const styles = StyleSheet.create({
     right: 18,
     top: '32%',
   },
+  letterCardFull: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   letterCardContent: { flex: 1 },
   // The self-reminder sheet's collapsed stand-in (see onReminderPeekChange) — a small "Remind me"
   // button, not a bare drag handle, pinned near the actual screen bottom (unlike letterCard,

@@ -13,11 +13,12 @@ import type { ThrowMapProps } from './throwMapTypes';
 // default (same center/zoom/bearing/pitch, picked per explicit user request), not a generic
 // whole-world fallback.
 const DEFAULT_CENTER = { latitude: 18.520358, longitude: 73.939097 };
-const DEFAULT_ZOOM = 16.26;
+const DEFAULT_ZOOM = 15.5;
 // react-native-maps' `heading` is 0-360° clockwise from north (unlike the web map's signed
 // Mapbox `bearing`) — -9.6° is the same rotation as 350.4°.
-const DEFAULT_HEADING = 350.4;
-const DEFAULT_PITCH = 76.5;
+const DEFAULT_HEADING = 0;
+// Flat 2D map (no tilt, no 3D buildings) so it loads fast on mobile data.
+const DEFAULT_PITCH = 0;
 const DEFAULT_REGION: Region = { ...DEFAULT_CENTER, latitudeDelta: 0.006, longitudeDelta: 0.006 };
 // The flying plane's size range — large right after launch, small on approach (see
 // `planeSizeForProgress`). City-level data doesn't warrant a literal 3D perspective projection,
@@ -122,7 +123,9 @@ export function ThrowMap({ pins, focus, fitPoints, route, onMapPress }: ThrowMap
       // there's no MapLibre-style custom layer to add here, this is entirely the platform map's
       // own rendering. Google Maps on Android doesn't extrude real building geometry the way
       // Apple Maps or the web MapLibre version do, so this mostly benefits iOS.
-      pitchEnabled
+      pitchEnabled={false}
+      rotateEnabled={false}
+      showsBuildings={false}
       // Day/night, one mechanism per platform: `userInterfaceStyle` switches Apple Maps' own
       // built-in dark rendering (iOS-only prop, silently ignored on Android); `customMapStyle`
       // is Google Maps' JSON styling hook (ignored by Apple Maps) — see throwMapNativeStyle.ts
