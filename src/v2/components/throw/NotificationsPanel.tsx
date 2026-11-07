@@ -1,313 +1,219 @@
+// Naked Notifications: a bare list straight on the Throw map — no panel, no cards, no dividers.
+// Each row is one line ("Priya posted a status · 2m") with a face, a blue dot while unread and
+// inline text actions. Plain-text filters (Status · Letters · Friends) with a dot under the active
+// one, small Today / Yesterday / Earlier labels, swipe a row left to clear it.
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import { colors, fontFamily, radius, spacing } from '../../theme';
-import { Icon } from '../Icon';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { FriendAvatar } from '../friends/FriendAvatar';
 import { useNotifications, type AppNotification } from '../../context/NotificationsContext';
 import { useFriends } from '../../context/FriendsContext';
 import { targetForNotification, type NotificationTarget } from '../../utils/notify';
-import { throwColor, throwRadius } from '../../theme/throwTokens';
-import { S, monoLabel, stickerCard, stickerPrimary, GlassFill } from './stickerStyle';
 
-const PLUS_ICON = 'M12 5v14M5 12h14';
-const PLANE_ICON = 'M22 2L11 13 M22 2L15 22L11 13L2 9L22 2Z';
-const CHAT_ICON = 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z';
-const CLOUD_ICON = 'M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z';
-const PHOTO_ICON = 'M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 15l-5-5L5 21';
-// The reference design's own blue accent (Mark all read, unread dots) — this app's shared theme
-// has no blue token of its own (its palette is lime/ink/pale throughout), so this matches Throw's
-// own accentBlue instead of introducing an unrelated hue from scratch.
-const ACCENT_BLUE = '#3D7BFF';
+const BLUE = '#3D7BFF';
 
-type Filter = 'all' | 'status_posted' | 'friend_requests' | 'chat_message' | 'throw';
+type Filter = 'status' | 'letters' | 'friends';
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'status_posted', label: 'Statuses' },
-  { id: 'friend_requests', label: 'Requests' },
-  { id: 'chat_message', label: 'Chats' },
-  { id: 'throw', label: 'Throws' },
+const FILTERS: { id: Filter; label: string; categories: string[] }[] = [
+  { id: 'status', label: 'Status', categories: ['status_posted'] },
+  { id: 'letters', label: 'Letters', categories: ['throw', 'chat_message'] },
+  { id: 'friends', label: 'Friends', categories: ['friend_requests'] },
 ];
 
-const RELEVANT_CATEGORIES = new Set<string>(FILTERS.map((f) => f.id).filter((id) => id !== 'all'));
-
-const BADGE: Record<string, { bg: string; icon: string; iconColor: string }> = {
-  friend_requests: { bg: '#3DD16B', icon: PLUS_ICON, iconColor: '#FFFFFF' },
-  throw: { bg: '#111111', icon: PLANE_ICON, iconColor: '#FFFFFF' },
-  chat_message: { bg: '#C9A227', icon: CHAT_ICON, iconColor: '#FFFFFF' },
-  status_posted: { bg: '#3D7BFF', icon: CLOUD_ICON, iconColor: '#FFFFFF' },
-};
-
-/** "2m"/"18m"/"1h"/"3d" — deliberately without an "ago" suffix, matching the reference design;
- * a notification from yesterday (but not today) reads "Yesterday" instead of "1d". */
-function timeLabel(iso: string): string {
-  const then = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - then.getTime();
-  const mins = Math.max(0, Math.round(diffMs / 60000));
+/** "2m" / "3h" / "4d" — no "ago". */
+function ago(iso: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return 'now';
   if (mins < 60) return `${mins}m`;
   const hours = Math.round(mins / 60);
   if (hours < 24) return `${hours}h`;
-  const oneDayAgo = new Date(now);
-  oneDayAgo.setDate(now.getDate() - 1);
-  if (then.toDateString() === oneDayAgo.toDateString()) return 'Yesterday';
-  const days = Math.round(hours / 24);
-  return `${days}d`;
+  return `${Math.round(hours / 24)}d`;
 }
 
-function isToday(iso: string): boolean {
-  return new Date(iso).toDateString() === new Date().toDateString();
+function dayGroup(iso: string): 'Today' | 'Yesterday' | 'Earlier' {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  const y = new Date(now);
+  y.setDate(now.getDate() - 1);
+  return d.toDateString() === y.toDateString() ? 'Yesterday' : 'Earlier';
 }
 
 interface NotificationsPanelProps {
-  /** Jumps to whatever this notification is about (a chat, a throw, a contact) — omit to just
-   * acknowledge in place. */
+  /** Jumps to whatever this notification is about (a chat, a throw, a contact). */
   onNavigate?: (target: NotificationTarget) => void;
+  /** Night map: light text with a dark halo instead of ink with a white one. */
+  isNight?: boolean;
 }
 
-/** The notification history — every friend request, throw, chat message, and status post that's
- * come in, grouped by day, filterable by category, built to match a supplied reference design.
- * Rendered as a floating solid white card above the map, directly inside ThrowHomeScreen,
- * instead of pushing to a separate full-screen route — reached from the recipient carousel's own
- * Notifications slot (see RecipientCarousel's own isNotificationsSelected), which the card stays
- * open for exactly as long as that slot stays selected. Distinct from the smaller quick-glance
- * NotificationsSheet used elsewhere in the app. */
-export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
-  const { notifications, unreadCount, acknowledge, clearAll } = useNotifications();
+export function NotificationsPanel({ onNavigate, isNight = false }: NotificationsPanelProps) {
+  const { notifications, unreadCount, acknowledge, clearAll, dismiss } = useNotifications();
   const { friends, receivedRequests, sentRequests, acceptRequest, declineRequest } = useFriends();
-  // Opens on Statuses (there's no "All" tab).
-  const [filter, setFilter] = useState<Filter>('status_posted');
+  // Opens on Status (there's no "All").
+  const [filter, setFilter] = useState<Filter>('status');
+  const t = isNight ? night : day;
 
   const avatarFor = (userId: string | null): { name: string; avatarUrl: string | null } | null => {
     if (!userId) return null;
     const f = friends.find((x) => x.userId === userId);
     if (f) return { name: f.name, avatarUrl: f.avatarUrl };
     const r = receivedRequests.find((x) => x.userId === userId) ?? sentRequests.find((x) => x.userId === userId);
-    if (r) return { name: r.name, avatarUrl: r.avatarUrl };
-    return null;
+    return r ? { name: r.name, avatarUrl: r.avatarUrl } : null;
   };
 
-  // `notifications` (NotificationsContext) is shared app-wide and also carries categories this
-  // panel has no pill/badge art for at all (Expenses' budget_reset/budget_alerts/invitations/
-  // expiring_items/item_reminders, shared_space_activity, etc.) — "All" must mean "all of this
-  // panel's own four categories", not literally every notification the user has ever gotten,
-  // or those rows show up with the wrong badge icon, no matching avatar, and a tap target that
-  // falls through to targetForNotification's generic default.
-  const relevant = useMemo(() => notifications.filter((n) => RELEVANT_CATEGORIES.has(n.category)), [notifications]);
-  const filtered = useMemo(() => (filter === 'all' ? relevant : relevant.filter((n) => n.category === filter)), [relevant, filter]);
-  const todayItems = useMemo(() => filtered.filter((n) => isToday(n.createdAt)), [filtered]);
-  const earlierItems = useMemo(() => filtered.filter((n) => !isToday(n.createdAt)), [filtered]);
+  const groups = useMemo(() => {
+    const cats = FILTERS.find((f) => f.id === filter)!.categories;
+    const list = notifications.filter((n) => cats.includes(n.category));
+    const out: { label: string; items: AppNotification[] }[] = [];
+    for (const n of list) {
+      const label = dayGroup(n.createdAt);
+      const g = out.find((x) => x.label === label);
+      if (g) g.items.push(n);
+      else out.push({ label, items: [n] });
+    }
+    return out;
+  }, [notifications, filter]);
 
-  const handlePress = (n: AppNotification) => {
+  const open = (n: AppNotification) => {
     acknowledge(n.id);
     onNavigate?.(targetForNotification(n));
   };
 
   const renderRow = (n: AppNotification) => {
-    const badge = BADGE[n.category] ?? BADGE.throw;
     const avatar = avatarFor(n.relatedUserId);
-    const isPendingRequest = n.category === 'friend_requests' && receivedRequests.some((r) => r.connectionId === n.entityId);
-    const [phrase, preview] = n.category === 'chat_message' ? n.body.split('\n') : [n.body, null];
-
+    const pendingRequest = n.category === 'friend_requests' && receivedRequests.some((r) => r.connectionId === n.entityId);
+    const phrase = n.body.split('\n')[0];
     return (
-      <Pressable key={n.id} onPress={() => handlePress(n)} accessibilityRole="button" accessibilityLabel={`${n.title} ${n.body}`} style={styles.row}>
-        <View style={styles.avatarWrap}>
-          <FriendAvatar userId={n.relatedUserId ?? n.id} name={avatar?.name ?? n.title} avatarUrl={avatar?.avatarUrl} size={44} />
-          <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-            <Icon path={badge.icon} size={11} color={badge.iconColor} strokeWidth={2.4} />
-          </View>
-        </View>
-
-        <View style={styles.rowBody}>
-          <Text style={styles.rowLine}>
-            <Text style={styles.rowName}>{n.title}</Text>
-            <Text style={styles.rowPhrase}> {phrase}</Text>
+      <SwipeToClear key={n.id} onClear={() => dismiss(n.id)}>
+        <Pressable
+          onPress={() => open(n)}
+          accessibilityRole="button"
+          accessibilityLabel={`${n.title} ${phrase}`}
+          style={({ pressed }) => [styles.row, n.read && styles.read, pressed && { opacity: 0.6 }]}
+        >
+          <FriendAvatar userId={n.relatedUserId ?? n.id} name={avatar?.name ?? n.title} avatarUrl={avatar?.avatarUrl} size={32} />
+          <Text style={styles.line} numberOfLines={1}>
+            <Text style={[styles.name, t.text]}>{n.title}</Text>
+            <Text style={[styles.phrase, t.text]}> {phrase}</Text>
+            <Text style={[styles.time, t.faint]}> · {ago(n.createdAt)}</Text>
           </Text>
-          {preview ? (
-            <Text style={styles.rowPreview} numberOfLines={1}>
-              {preview}
-            </Text>
-          ) : null}
-          <Text style={styles.rowTime}>{timeLabel(n.createdAt)}</Text>
-
-          {isPendingRequest && (
-            <View style={styles.actionsRow}>
-              <Pressable
-                onPress={() => acceptRequest(n.entityId!)}
-                style={styles.acceptButton}
-                accessibilityRole="button"
-                accessibilityLabel={`Accept ${n.title}`}
-              >
-                <Text style={styles.acceptLabel}>Accept</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => declineRequest(n.entityId!)}
-                style={styles.declineButton}
-                accessibilityRole="button"
-                accessibilityLabel={`Decline ${n.title}`}
-              >
-                <Text style={styles.declineLabel}>Decline</Text>
-              </Pressable>
+          {pendingRequest ? (
+            <View style={styles.actions}>
+              <TextAction label="Accept" color={BLUE} onPress={() => { acknowledge(n.id); acceptRequest(n.entityId!); }} halo={t.halo} />
+              <TextAction label="Ignore" color={t.faintColor} onPress={() => { acknowledge(n.id); declineRequest(n.entityId!); }} halo={t.halo} />
             </View>
-          )}
-        </View>
-
-        {n.category === 'status_posted' && (
-          <View style={styles.photoThumb}>
-            <Icon path={PHOTO_ICON} size={15} color={colors.textFaint} strokeWidth={1.8} />
-            <Text style={styles.photoThumbLabel}>photo</Text>
-          </View>
-        )}
-
-        {!n.read && <View style={styles.unreadDot} />}
-      </Pressable>
+          ) : n.category === 'throw' ? (
+            <TextAction label="Open" color={BLUE} onPress={() => open(n)} halo={t.halo} />
+          ) : null}
+          {!n.read ? <View style={styles.dot} /> : null}
+        </Pressable>
+      </SwipeToClear>
     );
   };
 
   return (
-    <View style={styles.card}>
-      <GlassFill />
-      {unreadCount > 0 && (
-        <View style={styles.header}>
-          <Pressable onPress={clearAll} accessibilityRole="button" accessibilityLabel="Mark all read">
-            <Text style={styles.markAllRead}>Mark all read</Text>
-          </Pressable>
+    <View style={styles.root}>
+      <View style={styles.top}>
+        <View style={styles.filters}>
+          {FILTERS.map((f) => {
+            const active = f.id === filter;
+            return (
+              <Pressable key={f.id} onPress={() => setFilter(f.id)} hitSlop={8} accessibilityRole="button" accessibilityState={{ selected: active }} accessibilityLabel={f.label} style={styles.filter}>
+                <Text style={[styles.filterLabel, t.text, !active && styles.filterIdle]}>{f.label}</Text>
+                <View style={[styles.filterDot, { backgroundColor: active ? t.inkColor : 'transparent' }]} />
+              </Pressable>
+            );
+          })}
         </View>
-      )}
+        {unreadCount > 0 ? <TextAction label="Mark all read" color={t.inkColor} onPress={clearAll} halo={t.halo} underline /> : null}
+      </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
-        {FILTERS.map((f) => {
-          const active = f.id === filter;
-          return (
-            <Pressable
-              key={f.id}
-              onPress={() => setFilter(f.id)}
-              style={[styles.filterPill, active && styles.filterPillActive]}
-              accessibilityRole="button"
-              accessibilityLabel={f.label}
-            >
-              <Text style={[styles.filterLabel, active && styles.filterLabelActive]}>{f.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
-        {filtered.length === 0 ? (
-          <Text style={styles.empty}>You're all caught up.</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
+        {groups.length === 0 ? (
+          <Text style={[styles.empty, t.faint]}>You&apos;re all caught up.</Text>
         ) : (
-          <>
-            {todayItems.length > 0 && (
-              <>
-                <Text style={styles.sectionLabel}>TODAY</Text>
-                {todayItems.map(renderRow)}
-              </>
-            )}
-            {earlierItems.length > 0 && (
-              <>
-                <Text style={styles.sectionLabel}>EARLIER</Text>
-                {earlierItems.map(renderRow)}
-              </>
-            )}
-          </>
+          groups.map((g) => (
+            <View key={g.label}>
+              <Text style={[styles.group, t.faint]}>{g.label}</Text>
+              {g.items.map(renderRow)}
+            </View>
+          ))
         )}
       </ScrollView>
     </View>
   );
 }
 
+function TextAction({ label, color, onPress, halo, underline }: { label: string; color: string; onPress: () => void; halo: object; underline?: boolean }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={10} accessibilityRole="button" accessibilityLabel={label}>
+      {({ pressed }) => <Text style={[styles.action, halo, { color }, underline && { textDecorationLine: 'underline' }, pressed && { opacity: 0.5 }]}>{label}</Text>}
+    </Pressable>
+  );
+}
+
+const CLEAR_AT = 96;
+
+/** Drag a row left past CLEAR_AT and let go: it slides away and is cleared. */
+function SwipeToClear({ onClear, children }: { onClear: () => void; children: React.ReactNode }) {
+  const x = useSharedValue(0);
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .activeOffsetX([-14, 14])
+    .failOffsetY([-10, 10])
+    .onUpdate((e) => {
+      x.set(Math.min(0, e.translationX));
+    })
+    .onEnd((e) => {
+      if (x.get() < -CLEAR_AT || e.velocityX < -700) {
+        x.set(withTiming(-480, { duration: 200 }));
+        setTimeout(onClear, 200);
+      } else {
+        x.set(withTiming(0, { duration: 180 }));
+      }
+    });
+  const st = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }], opacity: 1 + Math.max(-0.8, x.get() / 300) }));
+  return (
+    <GestureDetector gesture={pan}>
+      <Animated.View style={st}>{children}</Animated.View>
+    </GestureDetector>
+  );
+}
+
+const day = {
+  inkColor: '#16210C',
+  faintColor: 'rgba(22,33,12,.55)',
+  halo: { textShadowColor: 'rgba(255,255,255,.95)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  text: { color: '#16210C', textShadowColor: 'rgba(255,255,255,.95)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  faint: { color: 'rgba(22,33,12,.55)', textShadowColor: 'rgba(255,255,255,.95)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+};
+const night = {
+  inkColor: '#FFFFFF',
+  faintColor: 'rgba(255,255,255,.6)',
+  halo: { textShadowColor: 'rgba(0,0,0,.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  text: { color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  faint: { color: 'rgba(255,255,255,.6)', textShadowColor: 'rgba(0,0,0,.6)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+};
+
 const styles = StyleSheet.create({
-  card: {
-    flex: 1,
-    ...stickerCard,
-    // A little more breathing room above the filter row than the header alone gave it (see item
-    // 2's own explicit request) — starts the row a bit further down instead of flush against the
-    // card's own top edge/rounded corner, whether or not "Mark all read" is showing above it.
-    paddingTop: spacing.md,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  markAllRead: { fontFamily: 'Figtree_700Bold', fontSize: 13, color: S.ink, textDecorationLine: 'underline' },
-  // `width: '100%'` keeps this ScrollView from ever stretching past the card's own width (it
-  // otherwise shrink-wraps to its unclipped content on web) — without it, a too-wide pill row
-  // bleeds past the right edge instead of becoming properly horizontally scrollable there.
-  // `height` is pinned explicitly to the pills' own height (filterPill below) rather than left to
-  // auto-size from content — real iPhone Safari otherwise measures this horizontal ScrollView's
-  // cross-axis height too short (a flexbox min-height/overflow-content quirk specific to that
-  // engine, distinct from the WebKit pill-shrinking one noted on filterPill below), slicing the
-  // tops off every pill in the row instead of showing them full-height.
-  filterScroll: { flexGrow: 0, width: '100%', height: 38, marginBottom: spacing.md },
-  // Extra bottom MARGIN (not padding) so the TODAY/EARLIER label below has real space before it —
-  // kept off the ScrollView's own contentContainerStyle since that padding would otherwise just
-  // extend the (now explicitly height-pinned) scrollable content past what's visible, rather than
-  // actually making room below the row the way a true sibling-level gap does.
-  filterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
-  filterPill: {
-    paddingHorizontal: 12,
-    height: 32,
-    borderRadius: radius.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(22,33,12,.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    // Without this, some WebKit builds shrink these pills below their own text's natural width
-    // once the row's combined content doesn't fit the available width — the pill's background
-    // shrinks but its one-line Text doesn't wrap, so the label spills out past its own pill and
-    // visually overlaps its neighbor instead of the row simply scrolling. Pinning flexShrink to 0
-    // keeps every pill at its natural size no matter what.
-    flexShrink: 0,
-  },
-  filterPillActive: { backgroundColor: S.ink, borderColor: S.ink, boxShadow: `2px 2px 0 #FFFFFF, 2px 2px 0 1.5px ${S.ink}` } as ViewStyle,
-  filterLabel: { fontFamily: 'Figtree_600SemiBold', fontSize: 13, color: S.ink },
-  filterLabelActive: { color: colors.white },
-  sectionLabel: {
-    ...monoLabel,
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  listContent: { paddingBottom: spacing.lg },
-  empty: { fontFamily: 'Figtree_600SemiBold', fontSize: 14, color: S.faint, textAlign: 'center', paddingVertical: spacing.xl },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  avatarWrap: { position: 'relative' },
-  badge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: S.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowBody: { flex: 1, minWidth: 0, gap: 2 },
-  rowLine: { flexWrap: 'wrap' },
-  rowName: { fontFamily: 'Figtree_700Bold', fontSize: 14, color: S.ink },
-  rowPhrase: { fontFamily: 'Figtree_400Regular', fontSize: 14, color: S.ink },
-  rowPreview: { fontFamily: fontFamily.sans400, fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  rowTime: { fontFamily: fontFamily.sans400, fontSize: 12, color: colors.textFaint, marginTop: 2 },
-  actionsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
-  acceptButton: { ...stickerPrimary, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 16 },
-  acceptLabel: { fontFamily: 'Figtree_700Bold', fontSize: 13, color: '#FFFFFF' },
-  declineButton: { paddingVertical: 7, paddingHorizontal: 4 },
-  declineLabel: { fontFamily: fontFamily.sans600, fontSize: 13, color: colors.textSecondary },
-  photoThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: S.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoThumbLabel: { fontFamily: fontFamily.sans400, fontSize: 9, color: colors.textFaint, marginTop: 2 },
-  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: S.tomato, borderWidth: 1.5, borderColor: S.ink, marginTop: 6 },
+  root: { flex: 1 },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 6 },
+  filters: { flexDirection: 'row', alignItems: 'center', gap: 22 },
+  filter: { alignItems: 'center', gap: 4 },
+  filterLabel: { fontFamily: 'Figtree_700Bold', fontSize: 15 },
+  filterIdle: { opacity: 0.55 },
+  filterDot: { width: 5, height: 5, borderRadius: 3 },
+  list: { paddingBottom: 24 },
+  group: { fontFamily: 'Figtree_600SemiBold', fontSize: 12, letterSpacing: 0.3, marginTop: 14, marginBottom: 4, paddingHorizontal: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 6 },
+  read: { opacity: 0.55 },
+  line: { flex: 1, minWidth: 0 },
+  name: { fontFamily: 'Figtree_700Bold', fontSize: 14 },
+  phrase: { fontFamily: 'Figtree_500Medium', fontSize: 14 },
+  time: { fontFamily: 'Figtree_500Medium', fontSize: 13 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  action: { fontFamily: 'Figtree_700Bold', fontSize: 14 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: BLUE },
+  empty: { fontFamily: 'Figtree_600SemiBold', fontSize: 14, textAlign: 'center', paddingVertical: 28 },
 });

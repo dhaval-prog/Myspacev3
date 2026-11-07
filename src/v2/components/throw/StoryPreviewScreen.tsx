@@ -1,11 +1,9 @@
 import React, { type ComponentRef, useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Icon } from '../Icon';
 import { AutoplayVideoFill } from '../AutoplayVideoFill';
-import { throwColor, throwFont, throwRadius } from '../../theme/throwTokens';
+import { throwFont } from '../../theme/throwTokens';
 import type { StoryMediaType } from '../../types/story';
 
-const PLUS_ICON = 'M12 5v14M5 12h14';
 const FLIGHT_DURATION_MS = 480;
 const MIN_SCALE = 0.12;
 const MAX_TILT_DEG = 8;
@@ -22,6 +20,10 @@ interface StoryPreviewScreenProps {
    * as "sending it up to the same place a story lives" rather than inventing a second effect. Falls
    * back to a fixed distance if omitted (tests, or before the first real layout pass resolves it). */
   flightTargetY?: number;
+  /** Horizontal target for the flight (your face in the Add Status header); omit to fly straight up. */
+  flightTargetX?: number;
+  /** How far above the bottom the Post / Retake text sits (clears the menu bar). */
+  controlsBottom?: number;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -36,19 +38,21 @@ interface StoryPreviewScreenProps {
  * as it flies up toward the contact's ring, and only once that flight finishes does onConfirm
  * actually fire (see ThrowHomeScreen's own handleStoryPreviewConfirmed).
  */
-export function StoryPreviewScreen({ localUri, mediaType, flightTargetY, onCancel, onConfirm }: StoryPreviewScreenProps) {
+export function StoryPreviewScreen({ localUri, mediaType, flightTargetY, flightTargetX, controlsBottom = 16, onCancel, onConfirm }: StoryPreviewScreenProps) {
   const [flying, setFlying] = useState(false);
   const wrapRef = useRef<ComponentRef<typeof View>>(null);
   const flight = useRef(new Animated.Value(0)).current;
   // Read inside handleConfirm without needing to rebuild it on every relayout.
   const flightDistanceRef = useRef(DEFAULT_FLIGHT_DISTANCE);
+  const flightDxRef = useRef(0);
 
   const onLayout = () => {
     if (flightTargetY == null) return;
     requestAnimationFrame(() => {
-      wrapRef.current?.measureInWindow((_x, y, _width, height) => {
+      wrapRef.current?.measureInWindow((x, y, width, height) => {
         const ownCenterY = y + height / 2;
         flightDistanceRef.current = Math.max(140, ownCenterY - flightTargetY);
+        if (flightTargetX != null) flightDxRef.current = flightTargetX - (x + width / 2);
       });
     });
   };
@@ -66,6 +70,7 @@ export function StoryPreviewScreen({ localUri, mediaType, flightTargetY, onCance
   const flightDistance = Math.max(1, flightDistanceRef.current);
   const mediaStyle = {
     transform: [
+      { translateX: flight.interpolate({ inputRange: [-flightDistance, 0], outputRange: [flightDxRef.current, 0], extrapolate: 'clamp' as const }) },
       { translateY: flight },
       { scale: flight.interpolate({ inputRange: [-flightDistance, 0], outputRange: [MIN_SCALE, 1], extrapolate: 'clamp' as const }) },
       { rotate: flight.interpolate({ inputRange: [-flightDistance, 0], outputRange: [`-${MAX_TILT_DEG}deg`, '0deg'], extrapolate: 'clamp' as const }) },
@@ -84,16 +89,14 @@ export function StoryPreviewScreen({ localUri, mediaType, flightTargetY, onCance
       </Animated.View>
 
       {!flying && (
-        <View style={styles.bottomRow}>
-          <Pressable onPress={onCancel} hitSlop={10} style={styles.retakeBtn} accessibilityRole="button" accessibilityLabel="Retake">
-            <Text style={styles.retakeText}>Retake</Text>
+        // Naked: two plain words over the photo, no pills.
+        <View style={[styles.bottomRow, { bottom: controlsBottom }]}>
+          <Pressable onPress={onCancel} hitSlop={14} accessibilityRole="button" accessibilityLabel="Retake">
+            {({ pressed }) => <Text style={[styles.retakeText, pressed && styles.pressed]}>Retake</Text>}
           </Pressable>
 
-          <Pressable onPress={handleConfirm} hitSlop={10} style={styles.confirmBtn} accessibilityRole="button" accessibilityLabel="Add to status">
-            <View style={styles.confirmIconWrap}>
-              <Icon path={PLUS_ICON} size={14} color="#FFFFFF" strokeWidth={2.6} />
-            </View>
-            <Text style={styles.confirmText}>Add to status</Text>
+          <Pressable onPress={handleConfirm} hitSlop={14} accessibilityRole="button" accessibilityLabel="Post status">
+            {({ pressed }) => <Text style={[styles.confirmText, pressed && styles.pressed]}>Post</Text>}
           </Pressable>
         </View>
       )}
@@ -101,45 +104,23 @@ export function StoryPreviewScreen({ localUri, mediaType, flightTargetY, onCance
   );
 }
 
+const halo = { textShadowColor: 'rgba(0,0,0,.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 };
+
 const styles = StyleSheet.create({
   // No overflow constraint here — the card needs to be able to visually travel up past its own
   // resting bounds toward the contact's ring once confirmed; `card` itself (individually rounded)
   // clips only its own photo content.
   root: { flex: 1, position: 'relative' },
-  card: { ...StyleSheet.absoluteFill, borderRadius: throwRadius.paper, overflow: 'hidden', backgroundColor: '#000000' },
+  card: { ...StyleSheet.absoluteFill, borderRadius: 28, overflow: 'hidden', backgroundColor: '#000000' },
   bottomRow: {
     position: 'absolute',
-    bottom: 16,
-    left: 20,
-    right: 20,
+    left: 28,
+    right: 28,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  retakeBtn: {
-    paddingHorizontal: 22,
-    paddingVertical: 14,
-    borderRadius: 999,
-    backgroundColor: 'rgba(60,58,54,.65)',
-  },
-  retakeText: { color: '#FFFFFF', fontSize: 15, fontFamily: throwFont.ui600 },
-  confirmBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    ...throwColor.shadowSoft,
-  },
-  confirmIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: throwColor.storyRing,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmText: { color: '#1A1A1A', fontSize: 15, fontFamily: throwFont.ui700 },
+  retakeText: { color: 'rgba(255,255,255,.85)', fontSize: 17, fontFamily: throwFont.ui600, ...halo },
+  confirmText: { color: '#FFFFFF', fontSize: 22, fontFamily: throwFont.ui700, letterSpacing: -0.3, ...halo },
+  pressed: { opacity: 0.6 },
 });

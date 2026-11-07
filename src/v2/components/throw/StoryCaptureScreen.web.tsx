@@ -1,5 +1,5 @@
 import React, { type ComponentRef, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '../Icon';
@@ -67,6 +67,9 @@ interface StoryCaptureScreenProps {
   /** The status contact's own avatar, in absolute screen coordinates — see the native sibling's
    * own comment. */
   flightTargetY?: number;
+  /** Naked full-bleed layout: where the side glyphs start and how far up the shutter row sits. */
+  controlsTop?: number;
+  controlsBottom?: number;
 }
 
 /**
@@ -90,6 +93,8 @@ export function StoryCaptureScreen({
   onContactDragOffset,
   onContactDragEnd,
   flightTargetY,
+  controlsTop = 12,
+  controlsBottom = 16,
 }: StoryCaptureScreenProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -370,7 +375,7 @@ export function StoryCaptureScreen({
       <video ref={videoRef} autoPlay playsInline muted style={webVideoStyle} />
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close camera">
+      <Pressable onPress={handleClose} hitSlop={12} style={[styles.closeBtn, glyphShadow, { top: controlsTop }]} accessibilityRole="button" accessibilityLabel="Close camera">
         <Icon path={CLOSE_ICON} size={22} color="#FFFFFF" strokeWidth={2.2} />
       </Pressable>
 
@@ -378,7 +383,7 @@ export function StoryCaptureScreen({
         <Pressable
           onPress={() => setFacingMode((f) => (f === 'user' ? 'environment' : 'user'))}
           hitSlop={12}
-          style={styles.flipBtn}
+          style={[styles.flipBtn, glyphShadow, { top: controlsTop }]}
           accessibilityRole="button"
           accessibilityLabel="Flip camera"
         >
@@ -386,12 +391,12 @@ export function StoryCaptureScreen({
         </Pressable>
       )}
 
-      <View style={styles.bottomRow}>
+      <View style={[styles.bottomRow, { bottom: controlsBottom }]}>
         <Pressable
           onPress={pickFromLibrary}
           disabled={recording}
           hitSlop={12}
-          style={styles.galleryBtn}
+          style={[styles.galleryBtn, glyphShadow]}
           accessibilityRole="button"
           accessibilityLabel="Choose photo or video from library"
         >
@@ -447,7 +452,7 @@ export function StoryCaptureScreen({
       </View>
 
       {recording && (
-        <Text style={styles.recordingHint}>
+        <Text style={[styles.recordingHint, { bottom: controlsBottom + 134 }]}>
           {formatClockMs(elapsedMs)} / {formatClockMs(MAX_VIDEO_MS)} · tap to stop
         </Text>
       )}
@@ -459,32 +464,35 @@ export function StoryCaptureScreen({
 
 const webVideoStyle: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'cover' };
 
+// Naked controls: bare white glyphs with a soft shadow instead of dark circles.
+const glyphShadow = (Platform.OS === 'web'
+  ? { filter: 'drop-shadow(0 1px 3px rgba(0,0,0,.6))' }
+  : { shadowColor: '#000', shadowOpacity: 0.6, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } }) as object;
+
 const styles = StyleSheet.create({
   // Rounded + clipped to match the same paper-card slot this fills (see ContactStoryStack's own
   // `card` style) — this used to be a genuine full-screen takeover, where square corners made
   // sense; embedded inline, it needs to read as part of the same card the letter/stories do.
-  screen: { flex: 1, backgroundColor: '#000000', borderRadius: throwRadius.paper, overflow: 'hidden' },
+  screen: { flex: 1, backgroundColor: '#000000', overflow: 'hidden' },
   closeBtn: {
     position: 'absolute',
     top: 12,
-    left: 20,
+    left: 8,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   flipBtn: {
     position: 'absolute',
     top: 12,
-    right: 20,
+    right: 8,
     width: 40,
     height: 40,
     borderRadius: 20,
     // Plain, same as closeBtn — no accent border, per explicit request matching a reference
     // screenshot (a colored ring here read as an unrelated "active/selected" signal).
-    backgroundColor: 'rgba(0,0,0,.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -502,7 +510,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -526,7 +533,7 @@ const styles = StyleSheet.create({
   // the previous dedicated record button gave, just carried over onto this one button now.
   shutterInnerRecording: { width: SHUTTER_SIZE - 30, height: SHUTTER_SIZE - 30, borderRadius: 6 },
   modeToggle: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  modeText: { fontFamily: 'Figtree_700Bold', fontSize: 12, letterSpacing: 1, color: 'rgba(255,255,255,.55)' },
+  modeText: { fontFamily: 'Figtree_700Bold', fontSize: 12, letterSpacing: 1, color: 'rgba(255,255,255,.7)', textShadowColor: 'rgba(0,0,0,.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   modeTextActive: { color: '#FFD60A' },
   modeTextDisabled: { opacity: 0.4 },
   recordingHint: {
@@ -536,10 +543,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontFamily: 'Figtree_700Bold',
-    backgroundColor: 'rgba(0,0,0,.4)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+    textShadowColor: 'rgba(0,0,0,.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF' },
   permissionWrap: {
