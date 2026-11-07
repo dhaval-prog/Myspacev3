@@ -6,9 +6,39 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import type { FriendsMapCanvasProps } from './friendsMapCanvasTypes';
 
 mapboxgl.accessToken = MAPBOX_TOKEN;
-// A flat, full-colour street style (unlike ThrowMap's pitched "Standard" style) — this screen is a
-// straight-down 2D map, no 3D buildings/day-night config to drive.
-const MAPBOX_STYLE_URL = process.env.EXPO_PUBLIC_MAPBOX_FRIENDS_MAP_STYLE_URL ?? 'mapbox://styles/mapbox/streets-v12';
+// The "naked" map: Mapbox's light style with shop icons, street names, transit and other labels
+// stripped at load (only cities and neighbourhoods stay), recoloured to off-white land, white
+// roads and soft blue water — so people's faces are the only thing that stands out.
+const MAPBOX_STYLE_URL = process.env.EXPO_PUBLIC_MAPBOX_FRIENDS_MAP_STYLE_URL ?? 'mapbox://styles/mapbox/light-v11';
+
+/** Strips and recolours the loaded style (see MAPBOX_STYLE_URL). Every step is best-effort: a
+ * custom style without these layers is simply left alone. */
+function makeNaked(map: mapboxgl.Map) {
+  const layers = map.getStyle()?.layers ?? [];
+  const set = (fn: () => void) => {
+    try {
+      fn();
+    } catch {
+      // layer/property not in this style
+    }
+  };
+  for (const l of layers) {
+    const id = l.id;
+    if (l.type === 'symbol') {
+      // Keep only place names (cities, towns, neighbourhoods).
+      if (!/settlement|place-|country|state/.test(id)) set(() => map.setLayoutProperty(id, 'visibility', 'none'));
+      else set(() => map.setPaintProperty(id, 'text-color', 'rgba(60,64,80,.55)'));
+      continue;
+    }
+    if (l.type === 'background') set(() => map.setPaintProperty(id, 'background-color', '#F6F5F1'));
+    else if (l.type === 'fill' && /water/.test(id)) set(() => map.setPaintProperty(id, 'fill-color', '#DCE6F0'));
+    else if (l.type === 'fill' && /building/.test(id)) set(() => map.setLayoutProperty(id, 'visibility', 'none'));
+    else if (l.type === 'fill' && /landuse|park|national|landcover/.test(id)) set(() => map.setPaintProperty(id, 'fill-opacity', 0.25));
+    else if (l.type === 'line' && /road|bridge|tunnel/.test(id)) set(() => map.setPaintProperty(id, 'line-color', '#FFFFFF'));
+    else if (l.type === 'line' && /admin|boundary/.test(id)) set(() => map.setPaintProperty(id, 'line-opacity', 0.35));
+    else if (l.type === 'line' && /rail|transit|ferry|aerialway/.test(id)) set(() => map.setLayoutProperty(id, 'visibility', 'none'));
+  }
+}
 
 // Design handoff's own starting camera — zoom 4 (256px-tile convention) centered on India.
 const DEFAULT_CENTER: [number, number] = [79.5, 21.5]; // Mapbox wants [lng, lat]
@@ -34,11 +64,13 @@ function pointsKey(points: { latitude: number; longitude: number }[]): string {
  * ThrowMap, this canvas also *reports* its camera back out via `onCameraChange` (clustering and
  * the sheet/controls layout both need to know the live zoom/center, not just render pins at it).
  */
-export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand, onCameraChange }: FriendsMapCanvasProps) {
+export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand, onCameraChange, onMapPress }: FriendsMapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const onCameraChangeRef = useRef(onCameraChange);
   onCameraChangeRef.current = onCameraChange;
+  const onMapPressRef = useRef(onMapPress);
+  onMapPressRef.current = onMapPress;
   const [, forceRender] = useState(0);
   const [ready, setReady] = useState(false);
   const lastCommandTokenRef = useRef<number | null>(null);
@@ -70,6 +102,9 @@ export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand,
     map.on('zoom', rerender);
     map.once('idle', () => setReady(true));
     map.on('load', rerender);
+    map.on('style.load', () => makeNaked(map));
+    // Mapbox only fires 'click' for a tap, never for the end of a drag.
+    map.on('click', () => onMapPressRef.current?.());
     mapRef.current = map;
 
     let resizeObserver: ResizeObserver | null = null;
@@ -99,7 +134,9 @@ export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand,
     if (!map || !cameraCommand || cameraCommand.token === lastCommandTokenRef.current) return;
     lastCommandTokenRef.current = cameraCommand.token;
     if (cameraCommand.kind === 'jump') {
-      map.jumpTo({ center: [cameraCommand.center.longitude, cameraCommand.center.latitude], zoom: toMapboxZoom(cameraCommand.zoom) });
+      const to = { center: [cameraCommand.center.longitude, cameraCommand.center.latitude] as [number, number], zoom: toMapboxZoom(cameraCommand.zoom) };
+      if (cameraCommand.animate) map.easeTo({ ...to, duration: 650 });
+      else map.jumpTo(to);
     } else {
       const lngs = cameraCommand.points.map((p) => p.longitude);
       const lats = cameraCommand.points.map((p) => p.latitude);
@@ -130,7 +167,6 @@ export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand,
           inset: 0,
           opacity: ready ? 1 : 0,
           transition: 'opacity 240ms ease-out',
-          filter: 'grayscale(1) brightness(1.1) contrast(.85)',
         }}
       />
       {me &&
@@ -138,7 +174,7 @@ export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand,
           const pos = project(me.latitude, me.longitude);
           if (!pos) return null;
           return (
-            <View pointerEvents="none" style={{ position: 'absolute', left: pos.x, top: pos.y, zIndex: 1 }}>
+            <View pointerEvents="box-none" style={{ position: 'absolute', left: pos.x, top: pos.y, zIndex: 1 }}>
               {renderMe ? renderMe() : null}
             </View>
           );

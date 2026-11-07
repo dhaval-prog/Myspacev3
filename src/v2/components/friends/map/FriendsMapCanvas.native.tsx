@@ -35,7 +35,21 @@ function zoomFromLongitudeDelta(longitudeDelta: number, widthPx: number): number
  * are real `<Marker>`s the SDK positions itself (same approach `ThrowMap.native.tsx` already
  * uses) rather than absolutely-positioned views we project ourselves.
  */
-export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand, onCameraChange }: FriendsMapCanvasProps) {
+// The "naked" map on Android (Google Maps): no shop/transit icons or street names, soft colours.
+// iOS (Apple Maps) can't be restyled; there we just switch points of interest and buildings off.
+const NAKED_GOOGLE_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#f6f5f1' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#dce6f0' }] },
+  { featureType: 'water', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative', elementType: 'labels.text.fill', stylers: [{ color: '#80838f' }] },
+];
+
+export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand, onCameraChange, onMapPress }: FriendsMapCanvasProps) {
   const mapRef = useRef<MapView>(null);
   const [mapReady, setMapReady] = useState(false);
   const [widthPx, setWidthPx] = useState(390);
@@ -48,7 +62,7 @@ export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand,
     if (!map || !mapReady || !cameraCommand || cameraCommand.token === lastCommandTokenRef.current) return;
     lastCommandTokenRef.current = cameraCommand.token;
     if (cameraCommand.kind === 'jump') {
-      map.animateToRegion(regionFromCamera(cameraCommand.center, cameraCommand.zoom, widthPx), 0);
+      map.animateToRegion(regionFromCamera(cameraCommand.center, cameraCommand.zoom, widthPx), cameraCommand.animate ? 600 : 0);
     } else {
       map.fitToCoordinates(cameraCommand.points, { edgePadding: { top: 80, right: 60, bottom: 80, left: 60 }, animated: false });
     }
@@ -63,6 +77,17 @@ export function FriendsMapCanvas({ me, pins, renderPin, renderMe, cameraCommand,
         initialRegion={regionFromCamera(DEFAULT_CENTER, DEFAULT_ZOOM_256, widthPx)}
         rotateEnabled={false}
         pitchEnabled={false}
+        showsPointsOfInterests={false}
+        showsBuildings={false}
+        showsTraffic={false}
+        showsCompass={false}
+        toolbarEnabled={false}
+        customMapStyle={NAKED_GOOGLE_STYLE}
+        onPress={(e) => {
+          // Taps on a person's marker also reach the map on some platforms; ignore those.
+          if ((e.nativeEvent as { action?: string }).action === 'marker-press') return;
+          onMapPress?.();
+        }}
         onMapReady={() => setMapReady(true)}
         onRegionChangeComplete={(region: Region) => {
           onCameraChange({
