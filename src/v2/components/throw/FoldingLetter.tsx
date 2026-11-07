@@ -32,9 +32,7 @@ import {
   requestMotionPermission,
   ShutterFlash,
   SPRING,
-  StickerBadges,
   tick,
-  ToStamp,
   UndoToast,
   useShake,
 } from './letterFx';
@@ -298,13 +296,13 @@ function BottomIconSurface({
   /** The row's main button (voice) — dark with a lime offset, like the Chats screen's compose button. */
   primary?: boolean;
 }) {
-  // v3 "sticker" look, same as the Chats screen's buttons: solid fill, ink outline, hard offset shadow.
+  // Naked (v3): no circle, outline or shadow — just the glyph in faint ink. An active Bell keeps
+  // its colour change on the glyph itself (see its call site), not on a filled circle.
   void tintColor;
-  if (active) return <View style={[style, styles.iconSurface, styles.iconSurfaceActive]}>{children}</View>;
-  // Same look day and night (white circle, ink outline, hard ink shadow) — reads clearly on both papers.
   void isNight;
   void primary;
-  return <View style={[style, styles.iconSurface]}>{children}</View>;
+  void active;
+  return <View style={[style, styles.iconSurfaceNaked]}>{children}</View>;
 }
 /** A photo on the letter as a tilted polaroid held by tape: drops in, and peels off with an
  * upward drag (downward drags fold the paper, sideways ones scroll / change recipient). */
@@ -533,6 +531,14 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   }, [progress]);
 
   const hasContent = content.strokes !== null || (content.messageText?.trim().length ?? 0) > 0 || mediaItems.length > 0;
+  // Naked: the camera / mic / bell glyphs only come in once you tap into the letter (or once it
+  // has something on it, or a recording/reminder is active).
+  const [toolsWoken, setToolsWoken] = useState(false);
+  const toolsShown = toolsWoken || hasContent || voice.recording || friendAlertSchedule !== null || (selfReminderMode && reminderConfirmed);
+  const toolsV = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(toolsV, { toValue: toolsShown ? 1 : 0, duration: 220, useNativeDriver: false }).start();
+  }, [toolsShown, toolsV]);
 
   // A photo landing on the paper: shutter flash.
   useEffect(() => {
@@ -1209,7 +1215,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             underneath it — without its own opacity tied to canvasOpacity (same as the writing
             surface below), it would stay visible as a big empty rectangle around the plane once
             folded, since paperClip itself (just a clip boundary) never fades. */}
-        {!isNight && <Animated.View pointerEvents="none" style={[styles.paperClipBorder, { opacity: canvasOpacity }]} />}
+        {/* Naked: no outline — the paper lifts off the map with a soft shadow instead (paperClip). */}
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'auto' : 'none'}>
           <LetterCanvas
             ref={letterCanvasRef}
@@ -1220,6 +1226,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             wiggleKey={wiggle}
             onFocusPaper={() => {
               requestMotionPermission();
+              setToolsWoken(true);
               setWiggle((w) => w + 1);
             }}
             onPressInPaper={() => {
@@ -1239,19 +1246,12 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
         <ShutterFlash k={flashKey} />
         {mediaItems.length === 0 ? (
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]}>
-            <ToStamp label={hideBadges ? 'NOTE TO SELF' : `TO: ${recipientName.trim().split(/\s+/)[0].toUpperCase()}`} color="#2B4BFF" background={isNight ? '#FFFFFF' : undefined} />
+            {/* Naked: who it's for, handwritten in the letter's own ink (replaces the blue stamp). */}
+            <Text style={[styles.toLine, { color: isNight ? throwNightColor.ink : INK_BLUE }]} numberOfLines={1}>
+              {hideBadges ? 'note to self' : `to ${recipientName.trim().split(/\s+/)[0]}`}
+            </Text>
           </Animated.View>
         ) : null}
-
-        {/* Streak/leaderboard badges — moved here from a separate header chip so they read as
-            part of the letter itself; fades with the same canvasOpacity as the writing surface
-            so it's never left floating over the folded plane underneath. Hidden for a
-            self-reminder (hideBadges), where neither means anything. */}
-        {!hideBadges && (
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: canvasOpacity }]} pointerEvents={phase === 'writing' ? 'box-none' : 'none'}>
-            <StickerBadges streak={streak} points={points} recipientKey={recipientName} label={recipientName} />
-          </Animated.View>
-        )}
 
         {mediaItems.length > 0 && (
           // Fades out in lockstep with LetterCanvas (same canvasOpacity) once folding starts —
@@ -1303,9 +1303,9 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             styles.bottomRow,
             { paddingHorizontal: BOTTOM_ROW_HPAD, gap: BOTTOM_ROW_GAP * bottomRowScale },
             paperSize.height > 0 && bottomRowHeight > 0 ? { top: paperSize.height - bottomRowHeight } : { bottom: 0 },
-            { opacity: canvasOpacity, transform: [{ translateY: canvasOpacity.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] },
+            { opacity: Animated.multiply(canvasOpacity, toolsV), transform: [{ translateY: canvasOpacity.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] },
           ]}
-          pointerEvents={phase === 'writing' ? 'box-none' : 'none'}
+          pointerEvents={phase === 'writing' && toolsShown ? 'box-none' : 'none'}
         >
         <Pressable
           onPress={() => {
@@ -1319,7 +1319,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           {({ pressed }) => (
             <View style={[styles.roundBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
               <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlue} style={[styles.roundBtn, roundBtnDynamicStyle]}>
-                <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={STICKER_INK} strokeWidth={1.8} />
+                <Icon path={PHOTO_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.ink : STICKER_INK} strokeWidth={1.8} />
               </BottomIconSurface>
             </View>
           )}
@@ -1346,7 +1346,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             ) : (
               <View style={[styles.micBtnShadow, roundBtnDynamicStyle, pressed && styles.roundBtnPressed]}>
                 <BottomIconSurface isNight={isNight} tintColor={throwGlass.tintWaterBlueStrong} style={[styles.micBtn, roundBtnDynamicStyle]}>
-                  <Icon path={MIC_ICON} size={25 * bottomRowScale} color={STICKER_INK} strokeWidth={1.8} />
+                  <Icon path={MIC_ICON} size={25 * bottomRowScale} color={isNight ? throwNightColor.ink : STICKER_INK} strokeWidth={1.8} />
                 </BottomIconSurface>
               </View>
             )
@@ -1399,7 +1399,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
                   <Icon
                     path={BELL_ICON}
                     size={25 * bottomRowScale}
-                    color={(selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null) ? '#FFFFFF' : STICKER_INK}
+                    color={(selfReminderMode ? reminderConfirmed : friendAlertSchedule !== null) ? '#FF4F2E' : isNight ? throwNightColor.ink : STICKER_INK}
                     strokeWidth={1.8}
                   />
                 </Reanimated.View>
@@ -1477,13 +1477,11 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
           </Svg>
         </Reanimated.View>
       ) : null}
-      {phase === 'ready' && (
+      {/* Naked: no "Swipe up to throw" label (the bouncing chevron above says it) — only the
+          hints that explain why it can't be thrown yet. */}
+      {phase === 'ready' && (!hasContent || ((selfReminderMode || friendAlertSchedule !== null) && !reminderConfirmed)) && (
         <Text style={[styles.readyHint, isNight && styles.readyHintNight]}>
-          {!hasContent
-            ? 'Write something first'
-            : (selfReminderMode || friendAlertSchedule !== null) && !reminderConfirmed
-              ? 'Set a reminder time first'
-              : throwLabel}
+          {!hasContent ? 'Write something first' : 'Set a reminder time first'}
         </Text>
       )}
       {voice.recording && <Text style={[styles.readyHint, isNight && styles.readyHintNight]}>Listening…</Text>}
@@ -1599,7 +1597,8 @@ const styles = StyleSheet.create({
   // its rounded rect — see the render's own comment on why (a defensive boundary against a
   // load-time layout-measurement race, not just tidy). Absolutely filled rather than flex-sized
   // so it exactly matches paperArea's box regardless of any flex quirks.
-  paperClip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: throwRadius.paper, overflow: 'hidden' },
+  paperClip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: throwRadius.paper, overflow: 'hidden', boxShadow: '0 18px 40px rgba(20,24,40,.16), 0 2px 6px rgba(20,24,40,.08)' } as ViewStyle,
+  toLine: { position: 'absolute', top: 14, left: 20, right: 90, fontFamily: throwFont.hand500, fontSize: 20, lineHeight: 24 },
   // A light grey edge around the paper itself, day skin only (per explicit request) — the night
   // skin's own dark paper already reads as a distinct shape against the map without one. A
   // separate overlay (not merged onto paperClip itself) so its opacity can be tied to
@@ -1640,6 +1639,7 @@ const styles = StyleSheet.create({
   // The night skin's bottom-icon chrome — a solid dark circle instead of light glass (see
   // BottomIconSurface). Layered on top of whatever size style (roundBtn/micBtn) is already
   // passed in, so it only ever overrides backgroundColor.
+  iconSurfaceNaked: { backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', opacity: 0.72 },
   iconSurface: {
     backgroundColor: '#FFFFFF',
     borderWidth: 2,

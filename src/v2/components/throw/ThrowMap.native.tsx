@@ -44,7 +44,7 @@ function pointsKey(points: { latitude: number; longitude: number }[] | null | un
  * layer repaint, since react-native-maps has no equivalent. 3D buildings are similarly
  * platform-native rather than a layer this file adds: Apple Maps renders its own once pitched and
  * zoomed in close, with nothing further to wire up here. */
-export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
+export function ThrowMap({ pins, focus, fitPoints, route, onMapPress }: ThrowMapProps) {
   const mapRef = useRef<MapView>(null);
   const fitKey = pointsKey(fitPoints);
   const focusKey = focus ? `${focus.latitude.toFixed(3)},${focus.longitude.toFixed(3)}` : '';
@@ -101,6 +101,12 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     <MapView
       ref={mapRef}
       style={StyleSheet.absoluteFill}
+      // Naked Throw: no shop/transit icons; a tap on the map (not a pin) toggles the menu bar.
+      showsPointsOfInterests={false}
+      onPress={(e) => {
+        if ((e.nativeEvent as { action?: string }).action === 'marker-press') return;
+        onMapPress?.();
+      }}
       initialRegion={focus ? { ...focus, ...FOCUS_DELTA } : DEFAULT_REGION}
       initialCamera={
         focus

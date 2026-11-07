@@ -35,4 +35,6 @@ export interface ThrowMapProps {
   /** Fit the viewport to include every one of these points at once (the flight screen framing both endpoints). Takes priority over `focus`. */
   fitPoints?: LatLng[] | null;
   route?: ThrowMapRoute | null;
+  /** A tap on the map itself (not a pin, not the end of a drag) — naked Throw uses it to show/hide the menu bar. */
+  onMapPress?: () => void;
 }

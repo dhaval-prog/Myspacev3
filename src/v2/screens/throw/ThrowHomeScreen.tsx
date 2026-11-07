@@ -350,6 +350,20 @@ export function ThrowHomeScreen({
   // cards end above it — see cardsOverlay/notificationsOverlay's bottom interpolation below).
   // It still hides for the inline received-letters panel.
   const chromeShouldHide = isReceivingSelected;
+
+  // Naked Throw (v3): at rest it's just the map and the letter. The recipient row collapses to the
+  // selected face (tap it to open the row), and the menu bar shows only after a tap on the map
+  // around the letter (or while Notifications / Add Status is open).
+  const [carouselOpen, setCarouselOpen] = useState(false);
+  const [navShown, setNavShown] = useState(false);
+  const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
+  }, []);
+  const collapseSoon = () => {
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    collapseTimer.current = setTimeout(() => setCarouselOpen(false), 900);
+  };
   useEffect(() => {
     Animated.timing(chromeOpacity, { toValue: chromeShouldHide ? 0 : 1, duration: 280, useNativeDriver: false }).start();
     setChromeHidden(chromeShouldHide);
@@ -901,13 +915,42 @@ export function ThrowHomeScreen({
       {showMapBackground && <ThrowGlassBackdrop heightMultiplier={0.6} />}
 
       <View style={styles.mapArea}>
-        {showMapBackground ? <ThrowMap pins={pins} focus={focusTarget} /> : <ThrowGlassBackdrop fill isDay={mapIsDay} />}
+        {showMapBackground ? (
+          <ThrowMap
+            pins={pins}
+            focus={focusTarget}
+            // Naked: a tap on the map around the letter brings the menu bar in (or out) and folds
+            // the recipient row back to the selected face.
+            onMapPress={() => {
+              setNavShown((v) => !v);
+              setCarouselOpen(false);
+            }}
+          />
+        ) : (
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              setNavShown((v) => !v);
+              setCarouselOpen(false);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Show or hide the menu"
+          >
+            <ThrowGlassBackdrop fill isDay={mapIsDay} />
+          </Pressable>
+        )}
         {/* Screen-space atmospheric layer, not part of the map itself (see WeatherOverlay's own
             doc comment) — always mounted regardless of `inFlight` so it keeps falling, unchanged,
             all the way through the letter/fold/plane-flight lifecycle instead of restarting. Only
             meaningful over the real map's sky; the glassmorphism backdrop has no weather of its
             own to layer atop. */}
-        {showMapBackground && <WeatherOverlay />}
+        {/* Naked: the weather stays, but softer, so it sets the mood without competing with the letter. */}
+        {showMapBackground && (
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: 0.7 }]}>
+            <WeatherOverlay />
+          </View>
+        )}
+
 
         {!inFlight &&
           (lockedRecipient ? (
@@ -936,7 +979,11 @@ export function ThrowHomeScreen({
                   setIsNotificationsSelected(false);
                   setIsReceivingSelected(false);
                   setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
+                  collapseSoon();
                 }}
+                collapsed={!carouselOpen && !isNotificationsSelected && !isAddStorySelected}
+                onExpand={() => setCarouselOpen(true)}
+                streakFor={streakFor}
                 disabled={selfLocked || isCaptureMode || isPreviewMode}
                 isNight={!mapIsDay}
                 storyCountFor={storyCountFor}
@@ -1205,6 +1252,7 @@ export function ThrowHomeScreen({
         ]}
         pointerEvents={chromeHidden ? 'none' : 'box-none'}
       >
+        <NakedNavGate shown={navShown || isNotificationsSelected || isCardsMode}>
         <BottomNav
           activeId="throw"
           onSelect={(id) => {
@@ -1220,6 +1268,7 @@ export function ThrowHomeScreen({
           bottomInset={insets.bottom}
           reduceMotion={reduceMotion}
         />
+        </NakedNavGate>
       </Animated.View>
 
       {storyFlow?.name === 'trim' && (
@@ -1235,6 +1284,22 @@ export function ThrowHomeScreen({
         </Modal>
       )}
     </View>
+  );
+}
+
+/** Fades the menu bar in and out for naked Throw (on top of the fold's own chrome fade). */
+function NakedNavGate({ shown, children }: { shown: boolean; children: React.ReactNode }) {
+  const v = useRef(new Animated.Value(shown ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(v, { toValue: shown ? 1 : 0, duration: 260, useNativeDriver: true }).start();
+  }, [shown, v]);
+  return (
+    <Animated.View
+      pointerEvents={shown ? 'box-none' : 'none'}
+      style={{ opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }}
+    >
+      {children}
+    </Animated.View>
   );
 }
 
