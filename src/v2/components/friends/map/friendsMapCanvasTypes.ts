@@ -15,7 +15,7 @@ export interface FriendsMapCanvasPin {
  * the canvas to re-apply it, same "bump a counter to force a re-run" convention as this app's
  * other imperative-over-declarative-props pieces. `zoom` is always in the 256px-tile convention
  * (see friendsMapMath.ts) — each canvas converts it to whatever its own map SDK expects. */
-export type FriendsMapCameraCommand = { token: number } & ({ kind: 'jump'; center: LatLng; zoom: number } | { kind: 'fit'; points: LatLng[] });
+export type FriendsMapCameraCommand = { token: number } & ({ kind: 'jump'; center: LatLng; zoom: number; /** Glide there instead of cutting. */ animate?: boolean } | { kind: 'fit'; points: LatLng[] });
 
 export interface FriendsMapCanvasProps {
   me: LatLng | null;
@@ -27,4 +27,6 @@ export interface FriendsMapCanvasProps {
   cameraCommand: FriendsMapCameraCommand | null;
   /** Fires on every camera settle (gesture or commanded) — `zoom` in the 256px-tile convention. */
   onCameraChange: (camera: { zoom: number; center: LatLng }) => void;
+  /** A tap on the map itself (not on a pin, and not the end of a drag). */
+  onMapPress?: () => void;
 }
