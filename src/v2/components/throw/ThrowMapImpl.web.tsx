@@ -98,6 +98,27 @@ function applyLightPreset(map: mapboxgl.Map, isDay: boolean) {
   map.setConfigProperty('basemap', 'lightPreset', isDay ? 'day' : 'night');
 }
 
+// Naked Throw: the Standard basemap without shop/transit/street labels or 3D buildings, so the
+// letter is the only thing competing for attention. Each property is best-effort — a custom style
+// without one simply keeps its own default.
+function applyNakedBasemap(map: mapboxgl.Map) {
+  const props: [string, unknown][] = [
+    ['showPointOfInterestLabels', false],
+    ['showTransitLabels', false],
+    ['showRoadLabels', false],
+    ['showPedestrianRoads', false],
+    ['show3dObjects', false],
+    ['theme', 'faded'],
+  ];
+  for (const [k, v] of props) {
+    try {
+      map.setConfigProperty('basemap', k, v);
+    } catch {
+      // not supported by this style
+    }
+  }
+}
+
 // Mapbox Standard's own lightPreset switch isn't instant by default — the style ships with a
 // multi-second cross-fade transition (a deliberate "time-lapse" showcase for the Standard style),
 // which read as the map "not loading fast" whenever a contact switch also flips day/night.
@@ -149,7 +170,9 @@ function addOrUpdateRoute(map: mapboxgl.Map, points: LatLng[] | undefined) {
  * needed — day/night follows the *viewer's own* device clock, not any contact's destination, per
  * explicit request (every map and every contact reads the same day or night at once).
  */
-export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
+export function ThrowMap({ pins, focus, fitPoints, route, onMapPress }: ThrowMapProps) {
+  const onMapPressRef = useRef(onMapPress);
+  onMapPressRef.current = onMapPress;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [, forceRender] = useState(0);
@@ -196,6 +219,8 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
     const rerender = () => forceRender((n) => n + 1);
     map.on('move', rerender);
     map.on('zoom', rerender);
+    // Mapbox only fires 'click' for a tap, never for the end of a drag.
+    map.on('click', () => onMapPressRef.current?.());
     // Fires once the style is loaded, the camera has settled, and every tile currently in view has
     // arrived — the first point at which showing the real map actually looks finished rather than
     // half-populated. `.once` — this only ever gates the initial reveal, not every later idle
@@ -218,6 +243,7 @@ export function ThrowMap({ pins, focus, fitPoints, route }: ThrowMapProps) {
       try {
         disableStyleTransitions(map);
         applyLightPreset(map, isDayRef.current);
+        applyNakedBasemap(map);
         addOrUpdateRoute(map, routePointsRef.current);
       } catch (e) {
         console.error('[ThrowMap] failed to apply light preset/route after style load:', e);

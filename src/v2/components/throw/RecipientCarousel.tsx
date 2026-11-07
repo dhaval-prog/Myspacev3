@@ -121,6 +121,14 @@ interface RecipientCarouselProps {
    * onto it and gives it the same "active" chrome (pulse ring, inner border) a selected contact
    * or Add Status gets. Same convention as isAddStorySelected, one slot further left. */
   isNotificationsSelected?: boolean;
+  /** Naked Throw (v3): show only the selected contact — their face (status ring kept), first name
+   * and streak flame — and hide the rest of the row and the Notifications/Add Status slots. A
+   * paper-swipe drag (liveOffset) still reveals the row while it's in progress. */
+  collapsed?: boolean;
+  /** Collapsed only: tapping the selected face asks to open the full row. */
+  onExpand?: () => void;
+  /** Day streak with a contact, shown as a small flame next to the selected name. */
+  streakFor?: (userId: string) => number;
 }
 
 /** The status-letter-stack's own small count badge — top-right of the avatar, matching the
@@ -159,7 +167,17 @@ export function RecipientCarousel({
   onOpenNotifications,
   notificationsUnreadCount,
   isNotificationsSelected,
+  collapsed = false,
+  onExpand,
+  streakFor,
 }: RecipientCarouselProps) {
+  // 1 = full row visible, 0 = only the selected face (naked Throw). A paper-swipe drag in
+  // progress (liveOffset) always shows the row so you can see who's next.
+  const showRow = !collapsed || liveOffset != null;
+  const rowV = useRef(new Animated.Value(showRow ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(rowV, { toValue: showRow ? 1 : 0, duration: 220, useNativeDriver: false }).start();
+  }, [showRow, rowV]);
   const avatarPulse = useRef(new Animated.Value(1)).current;
   const isFirstPulseRender = useRef(true);
   useEffect(() => {
@@ -226,8 +244,9 @@ export function RecipientCarousel({
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => !disabled && n > 1,
-        onMoveShouldSetPanResponder: (_, g) => !disabled && n > 1 && Math.abs(g.dx) > 6,
+        // Collapsed (naked) mode doesn't scroll the hidden row — swiping the paper does that.
+        onStartShouldSetPanResponder: () => !disabled && !collapsed && n > 1,
+        onMoveShouldSetPanResponder: (_, g) => !disabled && !collapsed && n > 1 && Math.abs(g.dx) > 6,
         onPanResponderGrant: () => {
           draggingRef.current = true;
           grantOffsetRef.current = offsetValueRef.current;
@@ -262,7 +281,7 @@ export function RecipientCarousel({
           if (nearest !== selectedIndex || isAddStorySelected) onChangeIndex(nearest);
         },
       }),
-    [disabled, n, maxIndex, selectedIndex, onChangeIndex, offset, isAddStorySelected, minDragIndex, onOpenNotifications, onAddStory],
+    [disabled, collapsed, n, maxIndex, selectedIndex, onChangeIndex, offset, isAddStorySelected, minDragIndex, onOpenNotifications, onAddStory],
   );
 
   if (n === 0) return null;
@@ -303,9 +322,10 @@ export function RecipientCarousel({
               styles.item,
               {
                 transform: [{ translateX: notificationsTransform.translateX }, { scale: notificationsTransform.scale }],
-                opacity: notificationsTransform.opacity,
+                opacity: Animated.multiply(notificationsTransform.opacity, rowV),
               },
             ]}
+            pointerEvents={showRow ? 'auto' : 'none'}
           >
             <View style={styles.pressableContent}>
               <View style={styles.avatarWrap}>
@@ -337,8 +357,9 @@ export function RecipientCarousel({
           <Animated.View
             style={[
               styles.item,
-              { transform: [{ translateX: addStoryTransform.translateX }, { scale: addStoryTransform.scale }], opacity: addStoryTransform.opacity },
+              { transform: [{ translateX: addStoryTransform.translateX }, { scale: addStoryTransform.scale }], opacity: Animated.multiply(addStoryTransform.opacity, rowV) },
             ]}
+            pointerEvents={showRow ? 'auto' : 'none'}
           >
             <View style={styles.pressableContent}>
               <View style={styles.avatarWrap}>
@@ -361,10 +382,19 @@ export function RecipientCarousel({
         {friends.map((f, i) => {
           const { translateX, scale, opacity } = itemTransform(i);
           const isSelected = i === selectedIndex && !isAddStorySelected;
+          const streak = isSelected ? (streakFor?.(f.userId) ?? 0) : 0;
           return (
-            <Animated.View key={f.userId} style={[styles.item, { transform: [{ translateX }, { scale }], opacity }]}>
+            <Animated.View
+              key={f.userId}
+              style={[styles.item, { transform: [{ translateX }, { scale }], opacity: isSelected ? opacity : Animated.multiply(opacity, rowV) }]}
+              pointerEvents={isSelected || showRow ? 'auto' : 'none'}
+            >
               <Pressable
                 onPress={() => {
+                  if (collapsed && isSelected && onExpand) {
+                    onExpand();
+                    return;
+                  }
                   if (isSelected && onOpenStory && (storyCountFor?.(f.userId) ?? 0) > 0) {
                     onOpenStory(f.userId);
                     return;
@@ -376,7 +406,7 @@ export function RecipientCarousel({
                 style={styles.pressableContent}
               >
                 <View style={styles.avatarWrap}>
-                  {isSelected && <SelectedPulseRing isNight={isNight} />}
+                  {isSelected && !collapsed && <SelectedPulseRing isNight={isNight} />}
                   <Animated.View
                     style={isSelected && storyModeAvatarCount !== undefined ? { transform: [{ scale: avatarPulse }] } : undefined}
                   >
@@ -386,7 +416,7 @@ export function RecipientCarousel({
                         name={f.name}
                         avatarUrl={f.avatarUrl}
                         size={AVATAR_SIZE}
-                        style={isSelected && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
+                        style={isSelected && !collapsed && (isNight ? styles.avatarSelectedNight : styles.avatarSelected)}
                       />
                     </StoryRing>
                     {isSelected && storyModeAvatarCount !== undefined && (
@@ -407,6 +437,9 @@ export function RecipientCarousel({
                     {!(isSelected && storyModeAvatarCount !== undefined) && (
                       <AvatarCountBadge count={unreadCountFor?.(f.userId) ?? 0} isNight={isNight} />
                     )}
+                    {/* Collapsed: a small dot when there are unseen notifications (tap the face to
+                        open the row, where Notifications sits). */}
+                    {collapsed && isSelected && (notificationsUnreadCount ?? 0) > 0 && <View pointerEvents="none" style={styles.notifDot} />}
                   </Animated.View>
                 </View>
                 <Text
@@ -414,16 +447,18 @@ export function RecipientCarousel({
                     styles.name,
                     isNight && styles.nameNight,
                     isSelected && (isNight ? styles.nameSelectedNight : styles.nameSelected),
+                    // Naked: no card behind the name, so give it a soft halo against the sky.
+                    collapsed && isSelected && (isNight ? styles.haloNight : styles.haloDay),
                   ]}
                   numberOfLines={1}
                 >
                   {f.name.split(' ')[0]}
+                  {streak > 0 ? ` 🔥${streak}` : ''}
                 </Text>
-                {f.location && (
-                  <Text style={[styles.city, isNight && styles.cityNight]} numberOfLines={1}>
-                    {f.location.city}
-                  </Text>
-                )}
+                {/* Naked: no city lines (kept as an invisible spacer so the faces stay level). */}
+                <Text style={[styles.city, styles.hiddenPlaceholder]} numberOfLines={1}>
+                  {' '}
+                </Text>
               </Pressable>
             </Animated.View>
           );
@@ -504,6 +539,9 @@ const styles = StyleSheet.create({
   city: { fontFamily: throwFont.ui400, fontSize: 10.5, color: throwColor.inkFaint, marginTop: 1, textAlign: 'center' },
   cityNight: { color: 'rgba(255,255,255,.55)' },
   hiddenPlaceholder: { opacity: 0 },
+  haloDay: { textShadowColor: 'rgba(255,255,255,.95)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  haloNight: { textShadowColor: 'rgba(0,0,0,.55)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  notifDot: { position: 'absolute', top: 2, left: 2, width: 14, height: 14, borderRadius: 7, backgroundColor: '#FF4F2E', borderWidth: 2.5, borderColor: '#FFFFFF' },
   // "Notifications" is long enough to risk clipping at the regular name size within this strip's
   // narrow per-item width — sized down a touch so it reliably fits on one line, matching Add
   // Status's own label (kept at the same size for visual consistency between the two).
