@@ -351,102 +351,6 @@ function SnowOnPaper({ w, h, intensity }: { w: number; h: number; intensity: Int
   );
 }
 
-const fxBreathe = () => kf('fxBreathe', () => ({ '0%': { opacity: 0.75 }, '50%': { opacity: 1 }, '100%': { opacity: 0.75 } }));
-const fxRayShimmer = () =>
-  kf('fxRayShimmer', () => ({
-    '0%': { opacity: 0.25, transform: [{ translateX: 0 }] },
-    '50%': { opacity: 0.7, transform: [{ translateX: 10 }] },
-    '100%': { opacity: 0.25, transform: [{ translateX: 0 }] },
-  }));
-const fxLeaf = (n: number) =>
-  kf('fxLeaf' + n, () => ({
-    '0%': { transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }] },
-    '30%': { transform: [{ translateX: 6 + n }, { translateY: -3 }, { scale: 1.05 }] },
-    '60%': { transform: [{ translateX: -4 }, { translateY: 2 }, { scale: 0.97 }] },
-    '100%': { transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }] },
-  }));
-const fxMote = (dx: number, dy: number) =>
-  kf(`fxMote${dx}_${dy}`, () => ({
-    '0%': { opacity: 0, transform: [{ translateX: 0 }, { translateY: 0 }] },
-    '20%': { opacity: 0.9 },
-    '80%': { opacity: 0.7 },
-    '100%': { opacity: 0, transform: [{ translateX: dx }, { translateY: dy }] },
-  }));
-
-function SunOnPaper({ w, h }: { w: number; h: number }) {
-  const id = useSvgId('su');
-  return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
-      {/* Warm sunlight falling in from the top-right corner. */}
-      <A style={[StyleSheet.absoluteFill, loop(fxBreathe(), 6)]}>
-        <Svg width={w} height={h}>
-          <Defs>
-            <RadialGradient id={id + 'l'} cx="100%" cy="0%" r="95%">
-              <Stop offset="0" stopColor="#FFE08A" stopOpacity={0.55} />
-              <Stop offset="0.35" stopColor="#FFEFC2" stopOpacity={0.28} />
-              <Stop offset="1" stopColor="#FFF6DD" stopOpacity={0} />
-            </RadialGradient>
-          </Defs>
-          <Rect x={0} y={0} width={w} height={h} fill={`url(#${id}l)`} />
-        </Svg>
-      </A>
-      {/* Soft sunbeams. */}
-      <View style={{ position: 'absolute', right: -w * 0.2, top: -h * 0.3, width: w * 1.2, height: h * 1.6, transform: [{ rotate: '32deg' }] }}>
-        {[0.2, 0.42, 0.6, 0.78].map((x, i) => (
-          <A key={'r' + i} style={[{ position: 'absolute', top: 0, bottom: 0, left: `${x * 100}%`, width: 18 + i * 9 }, loop(fxRayShimmer(), 5 + i * 1.3, i * 0.8)]}>
-            <Svg width="100%" height="100%" viewBox="0 0 10 10" preserveAspectRatio="none">
-              <Defs>
-                <LinearGradient id={`${id}r${i}`} x1="0" y1="0" x2="1" y2="0">
-                  <Stop offset="0" stopColor="#FFF4CF" stopOpacity={0} />
-                  <Stop offset="0.5" stopColor="#FFF4CF" stopOpacity={0.55} />
-                  <Stop offset="1" stopColor="#FFF4CF" stopOpacity={0} />
-                </LinearGradient>
-              </Defs>
-              <Rect x={0} y={0} width={10} height={10} fill={`url(#${id}r${i})`} />
-            </Svg>
-          </A>
-        ))}
-      </View>
-      {/* Sunlight dappling through leaves, swaying in a breeze. */}
-      {Array.from({ length: 7 }, (_, i) => {
-        const s = 26 + rand(i + 4) * 40;
-        return (
-          <A
-            key={'l' + i}
-            style={[{ position: 'absolute', left: rand(i + 14) * w - s / 2, top: rand(i + 24) * h * 0.85 - s / 2, width: s, height: s * 0.7 }, loop(fxLeaf(i % 3), 4.5 + rand(i + 34) * 3.5, rand(i + 44) * 2)]}
-          >
-            <Svg width="100%" height="100%" viewBox="0 0 10 7">
-              <Defs>
-                <RadialGradient id={`${id}d${i}`} cx="50%" cy="50%" r="50%">
-                  <Stop offset="0" stopColor="#FFF1B8" stopOpacity={0.42} />
-                  <Stop offset="0.5" stopColor="#FFE38A" stopOpacity={0.14} />
-                  <Stop offset="1" stopColor="#FFE38A" stopOpacity={0} />
-                </RadialGradient>
-              </Defs>
-              <Ellipse cx={5} cy={3.5} rx={5} ry={3.5} fill={`url(#${id}d${i})`} />
-            </Svg>
-          </A>
-        );
-      })}
-      {/* Dust motes floating in the light. */}
-      {Array.from({ length: 9 }, (_, i) => {
-        const dx = Math.round(-20 - rand(i + 60) * 40);
-        const dy = Math.round(20 + rand(i + 70) * 50);
-        const s = 1.5 + rand(i + 80) * 2;
-        return (
-          <A
-            key={'m' + i}
-            style={[
-              { position: 'absolute', left: (0.4 + rand(i + 90) * 0.55) * w, top: rand(i + 100) * h * 0.55, width: s, height: s, borderRadius: s, backgroundColor: '#FFF8E0', boxShadow: '0 0 4px rgba(255,230,160,.9)' } as ViewStyle,
-              loop(fxMote(dx, dy), 7 + rand(i + 110) * 6, rand(i + 120) * 5, 'ease-in-out'),
-            ]}
-          />
-        );
-      })}
-    </View>
-  );
-}
-
 const fxCloudPass = (w: number) =>
   kf('fxCloudPass' + w, () => ({ '0%': { transform: [{ translateX: -w * 1.2 }] }, '100%': { transform: [{ translateX: w * 1.2 }] } }));
 
@@ -499,7 +403,7 @@ export function PaperWeather({
     if (condition === 'rain' || condition === 'thunderstorm' || condition === 'lightning')
       body = <RainOnPaper w={w} h={h} intensity={intensity} storm={condition !== 'rain'} reducedFlashing={reducedFlashing} />;
     else if (condition === 'snow') body = <SnowOnPaper w={w} h={h} intensity={intensity} />;
-    else if ((condition === 'sunny' || condition === 'clear') && !isNight) body = <SunOnPaper w={w} h={h} />;
+    // Sunny / clear: no effect on the paper (the sun rays were removed on request).
     else if (condition === 'cloudy' || condition === 'wind') body = <CloudShadows w={w} h={h} fast={condition === 'wind'} />;
   }
   return (
