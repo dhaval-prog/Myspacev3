@@ -741,6 +741,8 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
   const applyFoldProgress = useCallback(
     (next: number) => {
       progress.setValue(next);
+      // A fold drag is never a hold: stop the hold-to-shred timer so a slow swipe can't shred.
+      if (next > 0 && longPressRef.current) cancelLongPress();
       if (latest.current.phase !== 'folding' && next > 0) setPhase('folding');
       // RN Web's responder polyfill doesn't reliably fire onPanResponderGrant when this capture
       // steals the gesture from LetterCanvas mid-touch (only Move/Release fire on the new owner),
@@ -890,6 +892,7 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
       }
       if (Math.abs(dx) > CONTACT_FLICK_CAPTURE_DX && Math.abs(dx) > Math.abs(dy) * CONTACT_FLICK_CAPTURE_RATIO && latest.current.onContactDragOffset) {
         contactCapturedRef.current = true;
+        if (longPressRef.current) cancelLongPress();
         latest.current.onContactDragStart?.();
         // Negated — see the continuous-drag branch above for why.
         latest.current.onContactDragOffset(-dx / CONTACT_DRAG_SPACING);
@@ -1210,6 +1213,9 @@ export const FoldingLetter = forwardRef<FoldingLetterHandle, FoldingLetterProps>
             the paper's rounded edge for a frame or two before settling. The plane-stage block
             below is deliberately OUTSIDE this clip — its liftoff animation needs to fly up past
             the paper's own bounds, not be cut off at them. */}
+        {/* The paper's soft shadow fades with the writing surface, so no rectangle is left
+            around the plane once it's folded. */}
+        <Animated.View pointerEvents="none" style={[styles.paperShadow, { opacity: canvasOpacity }]} />
         <View style={styles.paperClip}>
         {/* The grey day-skin border belongs to the flat writing paper, not the folded plane
             underneath it — without its own opacity tied to canvasOpacity (same as the writing
@@ -1597,7 +1603,8 @@ const styles = StyleSheet.create({
   // its rounded rect — see the render's own comment on why (a defensive boundary against a
   // load-time layout-measurement race, not just tidy). Absolutely filled rather than flex-sized
   // so it exactly matches paperArea's box regardless of any flex quirks.
-  paperClip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: throwRadius.paper, overflow: 'hidden', boxShadow: '0 18px 40px rgba(20,24,40,.16), 0 2px 6px rgba(20,24,40,.08)' } as ViewStyle,
+  paperClip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: throwRadius.paper, overflow: 'hidden' },
+  paperShadow: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: throwRadius.paper, boxShadow: '0 18px 40px rgba(20,24,40,.16), 0 2px 6px rgba(20,24,40,.08)' } as ViewStyle,
   toLine: { position: 'absolute', top: 14, left: 20, right: 90, fontFamily: throwFont.hand500, fontSize: 20, lineHeight: 24 },
   // A light grey edge around the paper itself, day skin only (per explicit request) — the night
   // skin's own dark paper already reads as a distinct shape against the map without one. A

@@ -245,19 +245,10 @@ export function ThrowHomeScreen({
   // It still hides for the inline received-letters panel.
   const chromeShouldHide = isReceivingSelected;
 
-  // Naked Throw (v3): at rest it's just the map and the letter. The recipient row collapses to the
-  // selected face (tap it to open the row), and the menu bar shows only after a tap on the map
+  // Naked Throw (v3): at rest it's just the map and the letter. The recipient row shows every contact
+  // circle, and the menu bar shows only after a tap on the map
   // around the letter (or while Notifications / Add Status is open).
-  const [carouselOpen, setCarouselOpen] = useState(false);
   const [navShown, setNavShown] = useState(false);
-  const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (collapseTimer.current) clearTimeout(collapseTimer.current);
-  }, []);
-  const collapseSoon = () => {
-    if (collapseTimer.current) clearTimeout(collapseTimer.current);
-    collapseTimer.current = setTimeout(() => setCarouselOpen(false), 900);
-  };
   useEffect(() => {
     Animated.timing(chromeOpacity, { toValue: chromeShouldHide ? 0 : 1, duration: 280, useNativeDriver: false }).start();
     setChromeHidden(chromeShouldHide);
@@ -798,22 +789,16 @@ export function ThrowHomeScreen({
       <View style={styles.mapArea}>
         {showMapBackground ? (
           <ThrowMap
-            pins={pins}
+            // No faces on the map behind the Notifications list.
+            pins={isNotificationsSelected ? [] : pins}
             focus={focusTarget}
-            // Naked: a tap on the map around the letter brings the menu bar in (or out) and folds
-            // the recipient row back to the selected face.
-            onMapPress={() => {
-              setNavShown((v) => !v);
-              setCarouselOpen(false);
-            }}
+            // Naked: a tap on the map around the letter brings the menu bar in (or out).
+            onMapPress={() => setNavShown((v) => !v)}
           />
         ) : (
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => {
-              setNavShown((v) => !v);
-              setCarouselOpen(false);
-            }}
+            onPress={() => setNavShown((v) => !v)}
             accessibilityRole="button"
             accessibilityLabel="Show or hide the menu"
           >
@@ -860,10 +845,9 @@ export function ThrowHomeScreen({
                   setIsNotificationsSelected(false);
                   setIsReceivingSelected(false);
                   setSelectedFriendId(friendsWithLocation[i]?.userId ?? null);
-                  collapseSoon();
                 }}
-                collapsed={!carouselOpen && !isNotificationsSelected && !isAddStorySelected}
-                onExpand={() => setCarouselOpen(true)}
+                // Every contact circle stays visible at the top.
+                collapsed={false}
                 streakFor={streakFor}
                 disabled={selfLocked || isCaptureMode || isPreviewMode}
                 isNight={!mapIsDay || isStatusFlow}
